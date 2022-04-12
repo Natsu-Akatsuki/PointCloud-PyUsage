@@ -1,0 +1,5 @@
+setuptools
+numpy
+rospkg
+rospy
+scipy>=1.4
