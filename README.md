@@ -34,8 +34,20 @@ $ python3 setup_cpu.py clean
 | visualize/3dod/example.py                    | visualize pointcloud and 3D bbx based on **open3d**<br />remove foreground points |
 | visualize/3dod/visualize_livox_dataset.py    | visualize livox_dataset colored pointcloud on **rviz**       |
 | visualize/3dod/visualize_pcdet_result.py     | visualize OpenPCDet result on **rviz**                       |
+| visualize/stereo/dis2pointcloud.py           | tranform disparity image to pointcloud                       |
 
 ## Usage
+
+- dis2pointcloud
+
+<p align="center">
+<img src="https://natsu-akatsuki.oss-cn-guangzhou.aliyuncs.com/img/image-20220413194957408.png" alt="image-20220413194957408" width=50% height=50% />
+</p>
+
+```bash
+$ cd visualize/stereo/
+$ python3 dis2pointcloud.py
+```
 
 - visualize_pcdet_result
 
@@ -43,13 +55,8 @@ $ python3 setup_cpu.py clean
 # step1: install dependency
 $ apt install ros-noetic-jsk-recognition-msgs ros-noetic-jsk-rviz-plugins
 # step2: now the variable is hard coding, you should modify the path in the visualize_pcdet_result.py
-```
-
-<img src="https://natsu-akatsuki.oss-cn-guangzhou.aliyuncs.com/img/image-20220412134214121.png" alt="image-20220412134214121.png" style="zoom:67%;" />
-
-
-```bash
 # step3
+$ cd visualize/3dod
 $ python3 visualize_pcdet_result.py
 # step4: open rviz
 $ rviz -d kitti.rviz
@@ -65,4 +72,5 @@ $ rviz -d kitti.rviz
 - [livox_ros_driver](https://github.com/Livox-SDK/livox_ros_driver)
 - [livox_mapping](https://github.com/Livox-SDK/livox_mapping)
 - [OpenPCDet](https://github.com/open-mmlab/OpenPCDet)
+- [pykitti](https://github.com/utiasSTARS/pykitti)
 - [ros_numpy](https://github.com/eric-wieser/ros_numpy)
