@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.10)
-project(PcdIo)
+project(pointcloud_io)
 
 find_package(PCL QUIET)
 find_package(pybind11)
-message(WARNING ${CMAKE_CURRENT_SOURCE_DIR})
+set(CMAKE_BUILD_TYPE RELEASE)
 
 include_directories(${PCL_INCLUDE_DIRS})
 pybind11_add_module(load_pcd_file_pcl load_pcd_file_pcl.cpp)

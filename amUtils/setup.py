@@ -1,10 +1,14 @@
+import os
 import shutil
+import subprocess
+import sys
+from distutils.cmd import Command
 from distutils.command.clean import clean
 from pathlib import Path
-from distutils.cmd import Command
-from setuptools import find_packages, setup
-import os
-import subprocess
+
+from setuptools import Extension, find_packages, setup
+from setuptools.command.build_ext import build_ext
+from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
 package_name = "am-utils"
 
@@ -68,8 +72,38 @@ class CleanCommand(clean):
         else:
             print("'build' does not exist -- can't clean it")
 
+
 with open('requirements.txt') as f:
     required = f.read().splitlines()
+
+
+class CMakeBuild(Command):
+    description = "perform cmake"
+    user_options = []
+
+    # This method must be implemented
+    def initialize_options(self):
+        self.ext_module = ['pointcloud_io']
+
+    # This method must be implemented
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        for ext in self.ext_module:
+            ext = Path(ext).resolve()
+            build_path = ext / "build"
+            build_path.mkdir(parents=True, exist_ok=True)
+            subprocess.check_call(['cmake', '..'], cwd=str(build_path))
+            subprocess.check_call(['make', '-j4'], cwd=str(build_path))
+
+def make_cuda_ext(name, module, sources):
+    cuda_ext = CUDAExtension(
+        name="%s.%s" % (module, name),
+        sources=[os.path.join(*module.split("."), src) for src in sources],
+        extra_compile_args={'cxx': ['-Wno-deprecated-declarations']}
+    )
+    return cuda_ext
 
 if __name__ == '__main__':
     version = "0.0.1+%s" % get_git_commit_number()
@@ -77,7 +111,19 @@ if __name__ == '__main__':
     setup(
         author='anomynous',
         cmdclass={'uninstall': UninstallCommand,
-                  'clean': CleanCommand},
+                  'clean': CleanCommand,
+                  'build_ext': CMakeBuild,
+                  'build_cuda_ext': BuildExtension},
+        ext_modules=[
+            make_cuda_ext(
+                name="roiaware_pool3d_cuda",
+                module="ops.roiaware_pool3d",
+                sources=[
+                    "src/roiaware_pool3d.cpp",
+                    "src/roiaware_pool3d_kernel.cu",
+                ],
+            ),
+        ],
         install_requires=required,
         license="Apache License 2.0",
         name=package_name,

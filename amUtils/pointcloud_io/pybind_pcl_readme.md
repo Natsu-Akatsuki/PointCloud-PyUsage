@@ -1,8 +1,4 @@
- 
-
- 
-
-# 封装pcd文件的读取
+## 封装pcd文件的读取
 
 重点是构建一个numpy的c++封装类 `py::array_t<float>`来作为c++和python点云数据互通的桥梁
 
@@ -62,8 +58,6 @@ PYBIND11_MODULE(load_pcd_file, m) {
           "file_name"_a, "remove_nan"_a = true);
 };
 ```
-
-
 
 ## 解读代码
 
