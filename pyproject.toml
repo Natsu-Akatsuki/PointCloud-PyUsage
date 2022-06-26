@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "PyPCL"
+version = "0.1.1"
+requires-python = "<3.10"
+license = { text = "BSD 3-Clause License" }
+dependencies = [
+    "numpy",
+    "rospkg",
+    "rospy",
+    "scipy>=1.4",
+    "open3d"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]  # list of folders that contain the packages (["."] by default)
+exclude = ["ops"]

@@ -1,42 +1,39 @@
 # PointCloud-PyUsage
 
-A respository contains **python** implementations for **pointcloud** data.
+提供点云处理的python实现
 
 ## Requirement
 
-Test in ubuntu 20.04-ros noetic
+- 测试于ubuntu20.04
 
 ```bash
-$ cd PointCloud-PyUsage/amUtils/
+$ cd PointCloud-PyUsage
 # install
-$ python3 setup_cpu.py install
-```
-
-When you want to uninstall the dependency you could try as follows.
-
-```bash
+$ pip3 install -e .
+# 使用pybind后的拓宽库
+$ python3 setup.py build_cmake_ext
 # uninstall
 $ python3 setup_cpu.py uninstall
 # clean
 $ python3 setup_cpu.py clean
 ```
 
-## Outline
+## Outline(TODO)
 
-| file/package                                 | description                                                  |
-| -------------------------------------------- | ------------------------------------------------------------ |
-| io_and_transform.cpp                         | pcl io and data type transform<br />pcl<->vector; pcd<->pcl; bin->pcl<br /> |
-| restore_pointcloud_ring_info                 |                                                              |
-| amUtils/ros_numpy                            | numpy array <-> ros msg                                      |
-| amUtils/ddynamic_reconfigure_python          |                                                              |
-| amUtils/pointcloud_vis/intensity_to_color.py | get pseudo color based on intensity                          |
-| example/livox_msg_tran.py                    | Livox customMsg-> numpy (**note**: it costs 50ms), require dependency [livox_ros_driver](https://github.com/Livox-SDK/livox_ros_driver) |
-| visualize/3dod/example.py                    | visualize pointcloud and 3D bbx based on **open3d**<br />remove foreground points |
-| visualize/3dod/visualize_livox_dataset.py    | visualize livox_dataset colored pointcloud on **rviz**       |
-| visualize/3dod/visualize_pcdet_result.py     | visualize OpenPCDet result on **rviz**                       |
-| visualize/stereo/dis2pointcloud.py           | tranform disparity image to pointcloud                       |
+| file/package                              | description                                                  |
+| ----------------------------------------- | ------------------------------------------------------------ |
+| io_and_transform.cpp                      | pcl io and data type transform<br />pcl<->vector; pcd<->pcl; bin->pcl<br /> |
+| restore_pointcloud_ring_info              |                                                              |
+| ros_numpy                                 | numpy array <-> ros msg                                      |
+| ddynamic_reconfigure_python               |                                                              |
+| pointcloud_vis/intensity_to_color.py      | get pseudo color based on intensity                          |
+| livox_msg_tran.py                         | Livox customMsg-> numpy (**note**: it costs 50ms), require dependency [livox_ros_driver](https://github.com/Livox-SDK/livox_ros_driver) |
+| visualize/3dod/example.py                 | visualize pointcloud and 3D bbx based on **open3d**<br />remove foreground points |
+| visualize/3dod/visualize_livox_dataset.py | visualize livox_dataset colored pointcloud on **rviz**       |
+| visualize/3dod/visualize_pcdet_result.py  | visualize OpenPCDet result on **rviz**                       |
+| visualize/stereo/dis2pointcloud.py        | tranform disparity image to pointcloud                       |
 
-## Usage
+## Usage(TODO)
 
 - dis2pointcloud
 
@@ -65,6 +62,10 @@ $ rviz -d kitti.rviz
 <p align="center">
 <img src="https://natsu-akatsuki.oss-cn-guangzhou.aliyuncs.com/img/image-20220412135243609.png" alt="image-20220412135243609.png" width=50% height=50% />
 </p>
+
+## Log
+
+1. 2022.06.27 v0.1.2 参考[PEP 621](https://peps.python.org/pep-0621/)规范打包python模块
 
 ## Reference
 
