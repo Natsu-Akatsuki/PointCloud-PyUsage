@@ -1,14 +1,13 @@
+# from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 import os
 import shutil
 import subprocess
-import sys
 from distutils.cmd import Command
 from distutils.command.clean import clean
 from pathlib import Path
 
 from setuptools import Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext
-from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
 package_name = "am-utils"
 
@@ -46,11 +45,6 @@ class UninstallCommand(Command):
             print(f"Removing dist directory: {str(egg_dir)}")
 
 
-def write_version_to_file(version, target_file):
-    with open(target_file, "w") as f:
-        print('__version__ = "%s"' % version, file=f)
-
-
 class CleanCommand(clean):
     """
     Custom implementation of ``clean`` setuptools command."""
@@ -73,10 +67,6 @@ class CleanCommand(clean):
             print("'build' does not exist -- can't clean it")
 
 
-with open('requirements.txt') as f:
-    required = f.read().splitlines()
-
-
 class CMakeBuild(Command):
     description = "perform cmake"
     user_options = []
@@ -97,6 +87,7 @@ class CMakeBuild(Command):
             subprocess.check_call(['cmake', '..'], cwd=str(build_path))
             subprocess.check_call(['make', '-j4'], cwd=str(build_path))
 
+
 def make_cuda_ext(name, module, sources):
     cuda_ext = CUDAExtension(
         name="%s.%s" % (module, name),
@@ -105,26 +96,25 @@ def make_cuda_ext(name, module, sources):
     )
     return cuda_ext
 
+
 if __name__ == '__main__':
-    version = "0.0.1+%s" % get_git_commit_number()
-    write_version_to_file(version, "version.py")
     setup(
         author='anomynous',
+        version="0.0.1",
         cmdclass={'uninstall': UninstallCommand,
                   'clean': CleanCommand,
-                  'build_ext': CMakeBuild,
-                  'build_cuda_ext': BuildExtension},
-        ext_modules=[
-            make_cuda_ext(
-                name="roiaware_pool3d_cuda",
-                module="ops.roiaware_pool3d",
-                sources=[
-                    "src/roiaware_pool3d.cpp",
-                    "src/roiaware_pool3d_kernel.cu",
-                ],
-            ),
-        ],
-        install_requires=required,
+                  'build_ext': CMakeBuild,},
+                #   'build_cuda_ext': BuildExtension},
+        # ext_modules=[
+        #     make_cuda_ext(
+        #         name="roiaware_pool3d_cuda",
+        #         module="ops.roiaware_pool3d",
+        #         sources=[
+        #             "src/roiaware_pool3d.cpp",
+        #             "src/roiaware_pool3d_kernel.cu",
+        #         ],
+        #     ),
+        # ],
         license="Apache License 2.0",
         name=package_name,
         packages=find_packages(exclude=""),

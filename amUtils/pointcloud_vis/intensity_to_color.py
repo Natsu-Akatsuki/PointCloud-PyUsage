@@ -6,7 +6,7 @@ import open3d as o3d
 
 """
 note: pcd format: float32
-open3d format: float32[N,3]
+open3d format: float32[N,3] rgb (0,1)
 """
 
 
@@ -46,7 +46,7 @@ def color_pcd_to_color_o3d(pcd_color):
     return np.hstack([red[:, None], green[:, None], blue[:, None]])
 
 
-def intensity_to_color_o3d(intensity, is_normalized):
+def intensity_to_color_o3d(intensity, is_normalized=False):
     if is_normalized:
         normalized_min = np.min(intensity)
         normalized_max = np.max(intensity)

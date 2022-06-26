@@ -32,25 +32,40 @@ def load_cc_binary(file_path):
     return pointcloud
 
 
-def load_pcd(file_path):
-    pts = []
+def load_pcd(file_path, format="binary"):
+    """
+    note: only apply to pointcloud (x, y, z, intensity)
+    """
+    if format == "ascii":
+        pts = []
+        with open(file_path, 'r') as f:
+            data = f.readlines()
 
-    with open(file_path, 'r') as f:
-        data = f.readlines()
+        pts_num = data[9].strip('\n').split(' ')[-1]
+        pts_num = int(pts_num)
+        for line in data[11:]:
+            line = line.strip('\n')
+            xyzi = line.split(' ')
+            x, y, z, intensity = [eval(i) for i in xyzi[:4]]
+            pts.append([x, y, z, intensity])
 
-    pts_num = data[9].strip('\n').split(' ')[-1]
-    pts_num = int(pts_num)
-    for line in data[11:]:
-        line = line.strip('\n')
-        xyzi = line.split(' ')
-        x, y, z, intensity = [eval(i) for i in xyzi[:4]]
-        pts.append([x, y, z, intensity])
+        assert len(pts) == pts_num
+        pointcloud = np.zeros((pts_num, len(pts[0])), dtype=np.float32)
+        for i in range(pts_num):
+            pointcloud[i] = pts[i]
+        return pointcloud
+    elif format == "binary":
+        with open(file_path, 'rb') as f:
+            for line in range(11):
+                lines = f.readline()
+                if line == 9:
+                    pts_num = int(lines.decode().strip('\n').split(' ')[-1])
+            binary_data = f.read(pts_num * 16)
 
-    assert len(pts) == pts_num
-    pointcloud = np.zeros((pts_num, len(pts[0])), dtype=np.float32)
-    for i in range(pts_num):
-        pointcloud[i] = pts[i]
-    return pointcloud
+        pointcloud = np.frombuffer(binary_data, dtype=np.float32).reshape(-1, 4)
+        return pointcloud
+    else:
+        raise NotImplementedError
 
 
 def load_pcd_o3d(file_path):
@@ -154,3 +169,19 @@ def ros_subscribe_usage(topic_name="/livox/lidar"):
     rospy.init_node('subscribe_pointcloud', anonymous=False)
     rospy.Subscriber(topic_name, PointCloud2, pointcloud_callback)
     rospy.spin()
+
+
+def ros_pubilsh_usage(pointcloud):
+    import std_msgs
+    from ros_numpy.point_cloud2 import xyzi_numpy_to_pointcloud2
+    import rospy
+    from sensor_msgs.msg import PointCloud2
+
+    pointcloud_pub = rospy.Publisher("/pointcloud", PointCloud2, queue_size=1)
+
+    header = std_msgs.msg.Header()
+    header.stamp = rospy.Time.now()
+    header.frame_id = "velodyne"
+    pointcloud_msg = xyzi_numpy_to_pointcloud2(pointcloud, header)
+
+    pointcloud_pub.publish(pointcloud_msg)

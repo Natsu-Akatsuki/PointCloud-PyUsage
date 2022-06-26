@@ -275,6 +275,20 @@ def pointcloud2_to_xyz_array(cloud_msg, remove_nans=True):
 def pointcloud2_to_xyzi_array(cloud_msg, remove_nans=True):
     return get_xyzi_points(pointcloud2_to_array(cloud_msg), remove_nans=remove_nans)
 
+def xyz_numpy_to_pointcloud2(np_pointcloud, header):
+    data = np.zeros(np_pointcloud.shape[0], dtype=[
+        ('x', np.float32),
+        ('y', np.float32),
+        ('z', np.float32),
+    ])
+    data['x'] = np_pointcloud[:, 0]
+    data['y'] = np_pointcloud[:, 1]
+    data['z'] = np_pointcloud[:, 2]
+
+    msg = msgify(PointCloud2, data)
+    msg.header = header
+    return msg
+
 
 def xyzi_numpy_to_pointcloud2(np_pointcloud, header):
     data = np.zeros(np_pointcloud.shape[0], dtype=[
