@@ -74,16 +74,20 @@ def save_pcd(pointcloud_np, file_name="pointcloud.pcd", fields="xyzi"):
         f.write("# .PCD v.7 - Point Cloud Data file format\n")
         f.write("VERSION .7\n")
 
-        if fields == "xyzi":
-            f.write("FIELDS x y z intensity\n")
-        elif fields == "xyzrgb":
-            f.write("FIELDS x y z rgb\n")
+        if fields == "xyzi" or fields == "xyzrgb":
+            if fields == "xyzi":
+                f.write("FIELDS x y z intensity\n")
+            elif fields == "xyzrgb":
+                f.write("FIELDS x y z rgb\n")
+            f.write("SIZE 4 4 4 4\n")
+            f.write("TYPE F F F F\n")
+            f.write("COUNT 1 1 1 1\n")
+        elif fields == "xyz":
+            f.write("SIZE 4 4 4\n")
+            f.write("TYPE F F F\n")
+            f.write("COUNT 1 1 1\n")
         else:
             raise NotImplementedError("The fields is not supported yet.")
-
-        f.write("SIZE 4 4 4 4\n")
-        f.write("TYPE F F F F\n")
-        f.write("COUNT 1 1 1 1\n")
 
         f.write("WIDTH {}\n".format(pointcloud_np.shape[0]))
         f.write("HEIGHT 1\n")
