@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ampcl"
-version = "0.0.1"
+version = "0.0.2"
 authors = [
     { name = "Hongqian Hunag", email = "hong877381@gmail.com" },
 ]
@@ -21,7 +21,7 @@ dependencies = [
     "colorama",
     "funcy",
     "numba",
-    "open3d; python_version<'3.10'",
+    "open3d",
     "requests",
     "scipy>=1.4",
     "setuptools>=64.0",
@@ -32,3 +32,6 @@ o3d_viewer = "ampcl.visualization.o3d_viewer:main"
 
 [project.urls]
 "Homepage" = "https://github.com/Natsu-Akatsuki/PointCloud-PyUsage"
+
+[tool.setuptools.packages.find]
+exclude = ["map", "sensors"]

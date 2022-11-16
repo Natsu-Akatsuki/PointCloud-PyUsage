@@ -7,14 +7,6 @@
 ### 安装依赖
 
 - ROS1 / ROS2（如需要用到ROS的相关插件）
-- Open3D（如果Python版本为`3.10`，需自行安装Open3D@[ref](http://www.open3d.org/docs/latest/getting_started.html)）
-
-```bash
-# pip 版本需要大于等于20.3
-$ pip3 install -U --user pip
-$ pip3 install --user --pre https://storage.googleapis.com/open3d-releases-master/python-wheels/open3d-0.16.0-cp310-cp310-manylinux_2_27_x86_64.whl"
-```
-
 - 构建工具
 
 ```bash
@@ -41,6 +33,7 @@ $ bash install.sh
 |      `io`       |             导入和导出点云文件             |
 | `visualization` |                 点云可视化                 |
 |   `ros-utils`   | 动态调参，ROS消息类型和numpy类型的相互转换 |
+|    `filter`     |            点云下采样和直通滤波            |
 
 ### IO
 

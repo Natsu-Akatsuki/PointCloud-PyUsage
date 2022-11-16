@@ -1,2 +1,5 @@
 include ampcl/io/src/io_pyb.cpp
 include ampcl/io/CMakeLists.txt
+
+include ampcl/filter/src/filter_pyb.cpp
+include ampcl/filter/CMakeLists.txt

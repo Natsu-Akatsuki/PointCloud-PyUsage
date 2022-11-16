@@ -90,7 +90,8 @@ class CMakeBuild(build_ext):
 
 if __name__ == '__main__':
     setup(
-        ext_modules=[CMakeExtension("ampcl.io", source_dir="ampcl/io")],
+        ext_modules=[CMakeExtension("ampcl.io", source_dir="ampcl/io"),
+                     CMakeExtension("ampcl.filter", source_dir="ampcl/filter")],
         cmdclass={'uninstall': UninstallCommand,
                   'clean': CleanCommand,
                   'build_ext': CMakeBuild}
