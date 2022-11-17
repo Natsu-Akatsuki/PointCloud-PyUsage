@@ -27,9 +27,12 @@ class Calibration():
         :param pts_camera: (N, 3)
         :return pts_img: (N, 2)
         """
-        pts_camera = np.dot(pts_camera, self.intri_matrix.T)
+
         pts_camera_depth = pts_camera[:, 2]
-        pts_img = (pts_camera[:, 0:2].T / pts_camera[:, 2]).T  # (N, 2)
+
+        # 遵从slam14讲规范，先归一化再量化采样
+        pts_img = (pts_camera.T / pts_camera_depth).T
+        pts_img = np.dot(pts_img, self.intri_matrix.T)[:, 0:2]  # (N, 2)
 
         if image_shape is not None:
             pts_img[:, 0] = np.clip(pts_img[:, 0], a_min=0, a_max=image_shape[1] - 1)
