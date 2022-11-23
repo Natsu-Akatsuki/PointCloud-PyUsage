@@ -4,10 +4,11 @@
 
 ## 程序
 
-|      模块名       |                 作用                 |
-| :---------------: | :----------------------------------: |
-| `cc-converter.py` | 将cc的`pcd`点云转换为通用的`pcd`文件 |
-| `prepross_map.py` |   点云地图下采样、基于统计学的滤波   |
+|        模块名        |                        作用                        |
+| :------------------: | :------------------------------------------------: |
+|  `cc-converter.py`   |        将cc的`pcd`点云转换为通用的`pcd`文件        |
+|  `prepross_map.py`   |       对点云地图进行下采样、基于统计学的滤波       |
+| `gps_to_odometry.py` | 将GPS数据转换为ROS里程计数据以在RViz可视化（ROS1） |
 
 ## 工具
 
@@ -29,6 +30,9 @@ $ sudo snap refresh --edge cloudcompare
 
 - [为什么cloudcompare没有撤销操作](http://www.danielgm.net/cc/forum/viewtopic.php?t=1257)
 - [CloudCompare支持的文件格式](https://www.cloudcompare.org/doc/wiki/index.php?title=FILE_I/O)
+- 如何对点云做整体的偏移？
+  **Edit** | Edit global shift and scale
+- [https://www.youtube.com/watch?v=G7k_imsCCD4](https://www.youtube.com/watch?v=G7k_imsCCD4)
 
 #### Reference
 
