@@ -64,7 +64,7 @@ class Converter:
                         self.init_local_x = int(mgrs_code[5:5 + precision])
                         self.init_local_y = int(mgrs_code[5 + precision:])
 
-                output_bag.write(self.out_gnss_topic, navsatfix, t)
+                output_bag.write(self.out_gnss_topic, navsatfix, msg.header.stamp)
 
                 gnss_odom = Odometry()
                 gnss_odom.header.stamp = msg.header.stamp
