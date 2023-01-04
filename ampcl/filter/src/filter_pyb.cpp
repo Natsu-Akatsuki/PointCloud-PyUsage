@@ -1,6 +1,7 @@
 #include <pcl/point_types.h>
 #include <pcl/filters/filter.h>
 #include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/uniform_sampling.h>
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
@@ -11,7 +12,9 @@ using namespace py::literals;
 typedef pcl::PointXYZI PointT;
 const int FIELD_NUM = 4;
 
-py::array_t<float> cVoxelFilter(const py::array_t<float> &input, const std::vector<float> &voxel_size) {
+py::array_t<float> cVoxelFilter(const py::array_t<float> &input,
+                                const std::vector<float> &voxel_size,
+                                const std::string &mode = "mean") {
 
   auto input_ref = input.unchecked<2>();
   pcl::PointCloud<PointT>::Ptr pointcloud(new pcl::PointCloud<PointT>(input_ref.shape(0), 1));
@@ -22,10 +25,18 @@ py::array_t<float> cVoxelFilter(const py::array_t<float> &input, const std::vect
     pointcloud->points[i].intensity = input_ref(i, 3);
   }
 
-  pcl::VoxelGrid<PointT> vg;
-  vg.setInputCloud(pointcloud);
-  vg.setLeafSize(voxel_size[0], voxel_size[1], voxel_size[2]);
-  vg.filter(*pointcloud);
+  if (mode == "mean") {
+    pcl::VoxelGrid<PointT> filter;
+    filter.setInputCloud(pointcloud);
+    filter.setLeafSize(voxel_size[0], voxel_size[1], voxel_size[2]);
+    filter.filter(*pointcloud);
+  } else if (mode == "uniform") {
+    pcl::UniformSampling<PointT> filter;
+    filter.setInputCloud(pointcloud);
+    filter.setRadiusSearch(voxel_size[0]);
+    filter.filter(*pointcloud);
+  }
+
   unsigned int pc_size = pointcloud->width * pointcloud->height;
   py::array_t<float, py::array::c_style> pointcloud_output({(const int) pc_size, FIELD_NUM});
 
@@ -42,5 +53,5 @@ py::array_t<float> cVoxelFilter(const py::array_t<float> &input, const std::vect
 
 PYBIND11_MODULE(filter_pyb, m) {
   m.doc() = "an filter module for pointcloud";
-  m.def("cVoxelFilter", &cVoxelFilter, "filter pointcloud", "input"_a, "voxel_size"_a);
+  m.def("cVoxelFilter", &cVoxelFilter, "filter pointcloud", "input"_a, "voxel_size"_a, "mode"_a = "mean");
 };
