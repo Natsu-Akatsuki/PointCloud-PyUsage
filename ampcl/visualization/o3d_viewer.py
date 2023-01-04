@@ -4,6 +4,7 @@ import open3d as o3d
 from colorama import Fore
 from ..io import load_pointcloud
 from .intensity_to_color import intensity_to_color_o3d
+import numpy as np
 
 
 def o3d_viewer_from_pointcloud(pointcloud, is_normalized=False, colors=None):
@@ -11,9 +12,11 @@ def o3d_viewer_from_pointcloud(pointcloud, is_normalized=False, colors=None):
     pointcloud_o3d.points = o3d.utility.Vector3dVector(pointcloud[:, 0:3])
 
     if pointcloud.shape[1] == 4:
-        if not colors:
-            color_o3d = intensity_to_color_o3d(pointcloud[:, 3], is_normalized=is_normalized)
-        pointcloud_o3d.colors = o3d.utility.Vector3dVector(color_o3d)
+        if colors is None:
+            # 没有显式提供颜色时，则使用强度伪彩色
+            intensity = pointcloud[:, 3].astype(np.int32)
+            colors = intensity_to_color_o3d(intensity, is_normalized=is_normalized)
+        pointcloud_o3d.colors = o3d.utility.Vector3dVector(colors)
     o3d.visualization.draw_geometries([pointcloud_o3d])
 
 
