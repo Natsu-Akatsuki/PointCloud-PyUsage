@@ -26,6 +26,21 @@ def o3d_viewer_from_file(file_path, is_normalized=False):
     o3d_viewer_from_pointcloud(pointcloud_np, is_normalized)
 
 
+def visualize_point_with_sphere(points, radius=0.005, resolution=10, color=(1, 0, 0)):
+    """
+    用球体的方式可视化点云（可控制激光点大小）
+    :param points:
+    :return:
+    """
+    o3d_object = []
+    for point in points:
+        sphere = o3d.geometry.TriangleMesh.create_sphere(radius=radius, resolution=resolution)
+        sphere.translate(point[:3])
+        sphere.paint_uniform_color(color)
+        o3d_object.append(sphere)
+    return o3d_object
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("name", action="store", help="pointcloud file name")
