@@ -7,10 +7,11 @@
 ### 安装依赖
 
 - ROS1 / ROS2（如需要用到ROS的相关插件）
-- 构建工具
+- 包构建工具和拓展库构建工具
 
 ```bash
 $ pip3 install -U --user build pip setuptools wheel
+$ sudo apt install pybind11-dev
 ```
 
 ### 构建安装和安装包
