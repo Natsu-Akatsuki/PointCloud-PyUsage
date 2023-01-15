@@ -126,14 +126,19 @@ def save_pointcloud(pointcloud_np, file_name="pointcloud.npy", fields="xyzi"):
         raise NotImplementedError
 
 
-def load_pointcloud(file_name):
+def load_pointcloud(file_name, is_read_only=False):
     assert isinstance(file_name, str), "The file name should be a string"
     suffix = Path(file_name).suffix[1:]
     if suffix == "npy":
-        return load_npy(file_name)
-    if suffix == "bin":
-        return load_bin(file_name)
-    if suffix == "pcd":
-        return load_pcd(file_name)
+        pointcloud = load_npy(file_name)
+    elif suffix == "bin":
+        pointcloud = load_bin(file_name)
+    elif suffix == "pcd":
+        pointcloud = load_pcd(file_name)
     else:
         raise NotImplementedError("The file type is not supported yet.")
+
+    if not is_read_only:
+        pointcloud = pointcloud.copy()
+
+    return pointcloud

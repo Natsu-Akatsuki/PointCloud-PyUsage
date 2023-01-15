@@ -39,7 +39,7 @@ $ bash install.sh
 ### IO
 
 - 支持`npy`，`pcd`，`bin`点云文件的读取
-- 目前支持读取的字段包括`xyz`，`xyzi`
+- 目前支持读取的字段只包括`xyz`，`xyzi`（且需要是float32类型的数据），其他数据需参考代码自行调整
 
 ```python
 # >>> import usage >>>
