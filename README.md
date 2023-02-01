@@ -71,6 +71,27 @@ pointcloud = load_pointcloud("ampcl/data/pointcloud_ascii.pcd")
 o3d_viewer_from_pointcloud(pointcloud)
 ```
 
+- 基于ROS可视化KITTI数据集（三维目标检测），真值采用经OpenPCDet处理后的文件
+
+```bash
+$ cd dataset_visualization/3D_object_detection
+
+# 步骤一：修改config/kitti.yaml中的数据集路径和相关参数
+
+# 步骤二：启动程序
+(ROS1) $ python3 visualize_pcdet_result_ros1.py
+(ROS1) $ rviz -d kitti_ros1.rviz
+
+(ROS2) $ python3 visualize_pcdet_result_ros2.py
+(ROS2) $ rviz2 -d kitti_ros2.rviz
+```
+
+
+
+<p align="center">
+<img src="docs/kitti_visualization.gif" alt="img" width=50% height=50% />
+</p>
+
 ## 命令行
 
 ### 可视化点云
@@ -107,3 +128,4 @@ $ o3d_viewer -n <pointcloud_file>
 |     [OpenPCDet](https://github.com/open-mmlab/OpenPCDet)     |          神经网络算子和标定          |
 |       [pykitti](https://github.com/utiasSTARS/pykitti)       |          `KITTI`数据集读取           |
 | [livox_mapping](https://github.com/Livox-SDK/livox_mapping)  |          基于强度值的伪彩色          |
+| [3D-Detection-Tracking-Viewer](https://github.com/hailanyi/3D-Detection-Tracking-Viewer) |        检测结果采用车体3D模型        |

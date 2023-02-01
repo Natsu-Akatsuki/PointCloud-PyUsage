@@ -1,0 +1,16 @@
+DatasetParam:
+  dataset_dir: "/Dataset/Kitti/object/"
+  gt_file: "data/kitti_infos_val.pkl"
+  predict_file: "data/result.pkl"
+
+ROSParam:
+  pointcloud_topic: "/kitti/pointcloud"
+  image_topic: "/kitti/image"
+  bounding_box_topic: "/kitti/ground_truth"
+  frame: "lidar"
+
+VisParam:
+  # description: 自动还是手动触发显示数据（终端按回车键触发下一帧） True or False
+  auto: True
+  # description: 单位（秒）
+  update_time: 1
