@@ -55,7 +55,9 @@ def plane_fitting_ransac(pointcloud, debug=False, log=False, distance_threshold=
         quotient = l1 / l2
 
         # 排除三点共线的情况
-        if quotient[0] == quotient[1] and quotient[0] == quotient[2] and quotient[1] == quotient[2]:
+        if np.isclose(quotient[0], quotient[1], atol=1e-6) and \
+                np.isclose(quotient[0], quotient[2], atol=1e-6) and \
+                np.isclose(quotient[1], quotient[2], atol=1e-6):
             continue
 
         # 法向量归一化和求取平面系数
