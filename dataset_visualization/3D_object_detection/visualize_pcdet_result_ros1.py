@@ -1,18 +1,18 @@
 import time
 from pathlib import Path
 
+import common_utils
 import cv2
 import numpy as np
 import rospy
 import std_msgs.msg
-from ampcl.ros_utils import np_to_pointcloud2
+from common_utils import clear_bounding_box_marker
 from cv_bridge import CvBridge
-
 from sensor_msgs.msg import Image, PointCloud2
 from visualization_msgs.msg import MarkerArray
 
-import common_utils
-from common_utils import clear_bounding_box_marker
+from ampcl.ros_utils import np_to_pointcloud2
+from ampcl.visualization import color_o3d_to_color_ros
 
 
 def cls_type_to_id(cls_type):
@@ -66,17 +66,25 @@ class Visualization():
         # bbxes = np.vstack(pred_bbxes, gt_bbxes)
         bbxes = np.vstack(gt_bbxes)
 
+        all_colors = common_utils.generate_colors()
+
         box_marker_array = MarkerArray()
+        colors_np = np.full((pointcloud.shape[0], 3), np.array([0.8, 0.8, 0.8]))
         if bbxes.shape[0] > 0:
             for i in range(bbxes.shape[0]):
                 box = bbxes[i]
                 cls_id = int(box[7])
-                color = common_utils.id_to_color(cls_id)
-                box_marker = common_utils.create_bounding_box_marker(box, stamp, i, color, frame_id="lidar")
+                box_color = common_utils.id_to_color(cls_id)
+                box_marker = common_utils.create_bounding_box_marker(box, stamp, i, box_color, frame_id="lidar")
                 box_marker_array.markers.append(box_marker)
                 if cls_id == 2:
                     model_marker = common_utils.create_bounding_box_model(box, stamp, i, frame_id="lidar")
                     box_marker_array.markers.append(model_marker)
+
+                # 追加颜色
+                point_color = all_colors[cls_id % len(all_colors)]
+                indices_points_inside = common_utils.get_indices_of_points_inside(pointcloud, box)
+                colors_np[indices_points_inside] = point_color
 
         # clear history marker （RViz中的marker是追加的，取非替换或设置显示时间否则会残留）
         if self.last_box_num > 0:
@@ -88,6 +96,10 @@ class Visualization():
                 empty_marker_array.markers.append(empty_model_marker)
             self.bbx_pub.publish(empty_marker_array)
         self.last_box_num = bbxes.shape[0]
+
+        colors_ros = color_o3d_to_color_ros(colors_np)
+        pointcloud = np.column_stack((pointcloud, colors_ros))
+        pointcloud_msg = np_to_pointcloud2(pointcloud, header, field="xyzirgb")
 
         self.bbx_pub.publish(box_marker_array)
         self.pointcloud_pub.publish(pointcloud_msg)

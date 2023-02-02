@@ -129,3 +129,4 @@ $ o3d_viewer -n <pointcloud_file>
 |       [pykitti](https://github.com/utiasSTARS/pykitti)       |          `KITTI`数据集读取           |
 | [livox_mapping](https://github.com/Livox-SDK/livox_mapping)  |          基于强度值的伪彩色          |
 | [3D-Detection-Tracking-Viewer](https://github.com/hailanyi/3D-Detection-Tracking-Viewer) |        检测结果采用车体3D模型        |
+| [EagerMOT](https://github.com/aleksandrkim61/EagerMOT/blob/open_main/inputs/bbox.py#L121) |       检测框内的点赋予颜色信息       |

@@ -65,3 +65,12 @@ def intensity_to_color_o3d(intensity, is_normalized=True):
 def intensity_to_color_pcd(intensity):
     color_channel = intensity_to_color(intensity).view(np.uint32)
     return color_channel
+
+
+def color_o3d_to_color_ros(color_o3d):
+    color_o3d_int32 = np.int32(color_o3d * 255)
+    red = color_o3d_int32[:, 0]
+    green = color_o3d_int32[:, 1]
+    blue = color_o3d_int32[:, 2]
+    hex_color = np.uint32((red << 16) | (green << 8) | (blue << 0))
+    return hex_color.view(np.float32)
