@@ -7,7 +7,7 @@ from .intensity_to_color import intensity_to_color_o3d
 import numpy as np
 
 
-def o3d_viewer_from_pointcloud(pointcloud, is_normalized=False, colors=None):
+def o3d_viewer_from_pointcloud(pointcloud, is_normalized=False, colors=None, is_show=True):
     pointcloud_o3d = o3d.geometry.PointCloud()
     pointcloud_o3d.points = o3d.utility.Vector3dVector(pointcloud[:, 0:3])
 
@@ -17,7 +17,11 @@ def o3d_viewer_from_pointcloud(pointcloud, is_normalized=False, colors=None):
             intensity = pointcloud[:, 3].astype(np.int32)
             colors = intensity_to_color_o3d(intensity, is_normalized=is_normalized)
         pointcloud_o3d.colors = o3d.utility.Vector3dVector(colors)
-    o3d.visualization.draw_geometries([pointcloud_o3d])
+
+    if is_show:
+        o3d.visualization.draw_geometries([pointcloud_o3d])
+    else:
+        return pointcloud_o3d
 
 
 def o3d_viewer_from_file(file_path, is_normalized=False):
