@@ -83,6 +83,7 @@ def save_pcd(pointcloud_np, file_name="pointcloud.pcd", fields="xyzi"):
             f.write("TYPE F F F F\n")
             f.write("COUNT 1 1 1 1\n")
         elif fields == "xyz":
+            f.write("FIELDS x y z\n")
             f.write("SIZE 4 4 4\n")
             f.write("TYPE F F F\n")
             f.write("COUNT 1 1 1\n")
