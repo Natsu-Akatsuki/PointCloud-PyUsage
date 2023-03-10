@@ -1,17 +1,18 @@
+import os
 import time
 from pathlib import Path
 
 import cv2
 import numpy as np
+from tqdm import tqdm
 
 import common_utils
-from common_utils import clear_bounding_box_marker
 
 # isort: off
 try:
     import rospy
 
-    ROS_VERSION = 1
+    __ROS_VERSION__ = 1
 
 
     class Node:
@@ -22,7 +23,8 @@ except:
         import rclpy
         from rclpy.node import Node
         from rclpy.qos import QoSDurabilityPolicy, QoSProfile
-        ROS_VERSION = 2
+
+        __ROS_VERSION__ = 2
     except:
         raise ImportError("Please install ROS2 or ROS1")
 
@@ -32,7 +34,9 @@ from sensor_msgs.msg import Image, PointCloud2
 from visualization_msgs.msg import MarkerArray
 # isort: on
 
-
+from ampcl.calibration.calibration_kitti import Calibration
+from ampcl.calibration.object3d_kitti import get_objects_from_label
+from ampcl.io import load_pointcloud
 from ampcl.ros_utils import np_to_pointcloud2
 from ampcl.visualization import color_o3d_to_color_ros
 
@@ -50,11 +54,11 @@ class Visualization(Node):
         cfg = common_utils.Config("config/kitti.yaml")
 
         # ROS
-        if ROS_VERSION == 1:
+        if __ROS_VERSION__ == 1:
             self.pointcloud_pub = rospy.Publisher(cfg.pointcloud_topic, PointCloud2, queue_size=1, latch=True)
             self.img_pub = rospy.Publisher(cfg.image_topic, Image, queue_size=1, latch=True)
             self.bbx_pub = rospy.Publisher(cfg.bounding_box_topic, MarkerArray, queue_size=5, latch=True)
-        if ROS_VERSION == 2:
+        if __ROS_VERSION__ == 2:
             latching_qos = QoSProfile(depth=10, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
             self.pointcloud_pub = self.create_publisher(PointCloud2, cfg.pointcloud_topic, latching_qos)
             self.img_pub = self.create_publisher(Image, cfg.image_topic, latching_qos)
@@ -65,26 +69,24 @@ class Visualization(Node):
 
         # Data
         dataset_dir = Path(cfg.dataset_dir)
-        gt_file = Path(cfg.gt_file).resolve()
-        predict_file = Path(cfg.predict_file).resolve()
-        self.gt_infos = common_utils.open_pkl_file(gt_file)
-        self.pred_infos = common_utils.open_pkl_file(predict_file)
-        self.image_dir_path = str(dataset_dir / "training/image_2")
-        self.lidar_dir_path = str(dataset_dir / "training/velodyne")
+        self.image_dir_path = dataset_dir / Path(cfg.image_dir_path)
+        self.pointcloud_dir_path = dataset_dir / cfg.pointcloud_dir_path
+        self.label_dir_path = dataset_dir / cfg.label_dir_path
+        self.calib_dir_path = dataset_dir / cfg.calib_dir_path
 
         # Visualization
         self.auto_update = cfg.auto_update
         self.update_time = cfg.update_time
 
         self.last_box_num = 0
-        self.iter_dataset()
+        self.iter_dataset_with_kitti_label()
 
     def publish_result(self, pointcloud, img, pred_bbxes=None, gt_bbxes=None):
 
-        frame = "lidar"
-        if ROS_VERSION == 1:
+        frame = self.frame
+        if __ROS_VERSION__ == 1:
             stamp = rospy.Time.now()
-        if ROS_VERSION == 2:
+        if __ROS_VERSION__ == 2:
             stamp = self.get_clock().now().to_msg()
 
         header = std_msgs.msg.Header()
@@ -115,16 +117,16 @@ class Visualization(Node):
 
                 # 追加颜色
                 point_color = all_colors[cls_id % len(all_colors)]
-                indices_points_inside = common_utils.get_indices_of_points_inside(pointcloud, box)
+                indices_points_inside = common_utils.get_indices_of_points_inside(pointcloud, box, margin=0.1)
                 colors_np[indices_points_inside] = point_color
 
         # clear history marker （RViz中的marker是追加的，取非替换或设置显示时间否则会残留）
         if self.last_box_num > 0:
             empty_marker_array = MarkerArray()
             for i in range(self.last_box_num):
-                empty_shape_marker = clear_bounding_box_marker(stamp, i, ns="shape", frame_id="lidar")
+                empty_shape_marker = common_utils.clear_bounding_box_marker(stamp, i, ns="shape", frame_id="lidar")
                 empty_marker_array.markers.append(empty_shape_marker)
-                empty_model_marker = clear_bounding_box_marker(stamp, i, ns="model", frame_id="lidar")
+                empty_model_marker = common_utils.clear_bounding_box_marker(stamp, i, ns="model", frame_id="lidar")
                 empty_marker_array.markers.append(empty_model_marker)
             self.bbx_pub.publish(empty_marker_array)
         self.last_box_num = bbxes.shape[0]
@@ -137,41 +139,63 @@ class Visualization(Node):
         self.pointcloud_pub.publish(pointcloud_msg)
         self.img_pub.publish(img_msg)
 
-    def iter_dataset(self):
+    def kitti_object_to_pcdet_object(self, label_path, cal_path):
+        obj_list = get_objects_from_label(label_path)
+        calib = Calibration(cal_path)
 
-        for i in range(len(self.gt_infos)):
-            if ROS_VERSION == 1 and rospy.is_shutdown():
+        # 此处的临时变量用于提高可读性
+        annotations = {}
+        annotations['name'] = np.array([obj.cls_type for obj in obj_list])
+        annotations['truncated'] = np.array([obj.truncation for obj in obj_list])
+        annotations['occluded'] = np.array([obj.occlusion for obj in obj_list])
+        annotations['alpha'] = np.array([obj.alpha for obj in obj_list])
+        annotations['bbox'] = np.concatenate([obj.box2d.reshape(1, 4) for obj in obj_list], axis=0)
+        annotations['dimensions'] = np.array([[obj.l, obj.h, obj.w] for obj in obj_list])  # lhw(camera) format
+        annotations['location'] = np.concatenate([obj.loc.reshape(1, 3) for obj in obj_list], axis=0)
+        annotations['rotation_y'] = np.array([obj.ry for obj in obj_list])
+        annotations['score'] = np.array([obj.score for obj in obj_list])
+        annotations['difficulty'] = np.array([obj.level for obj in obj_list], np.int32)
+
+        num_objects = len([obj.cls_type for obj in obj_list if obj.cls_type != 'DontCare'])  # 可用的object数
+        num_gt = len(annotations['name'])  # 标签中的object数
+        index = list(range(num_objects)) + [-1] * (num_gt - num_objects)
+        annotations['index'] = np.array(index, dtype=np.int32)
+        # note: Don't care都是在最后的，所以可以用这种方式处理
+        loc = annotations['location'][:num_objects]  # x, y, z
+        dims = annotations['dimensions'][:num_objects]  # l, w, h
+        rots = annotations['rotation_y'][:num_objects]  # yaw
+        loc_lidar = calib.rect_to_lidar(loc)  # points from camera frame->lidar frame
+        class_name = annotations['name'][:num_objects]
+        gt_class_id = []
+        for i in range(class_name.shape[0]):
+            gt_class_id.append(int(cls_type_to_id(class_name[i])))
+        gt_class_id = np.asarray(gt_class_id, dtype=np.int32).reshape(-1, 1) + 1
+
+        l, h, w = dims[:, 0:1], dims[:, 1:2], dims[:, 2:3]
+        loc_lidar[:, 2] += h[:, 0] / 2  # btn center->geometry center
+        gt_boxes_lidar = np.concatenate([loc_lidar, l, w, h, -(np.pi / 2 + rots[..., np.newaxis]), gt_class_id], axis=1)
+        return gt_boxes_lidar
+
+    def iter_dataset_with_kitti_label(self):
+
+        label_paths = sorted(list(Path(self.label_dir_path).glob('*.txt')))
+        for label_path in tqdm(label_paths):
+            if __ROS_VERSION__ == 1 and rospy.is_shutdown():
                 exit(0)
-            if ROS_VERSION == 2 and not rclpy.ok():
+            if __ROS_VERSION__ == 2 and not rclpy.ok():
                 exit(0)
 
-            file_idx = self.gt_infos[i]['point_cloud']['lidar_idx']
+            file_idx = label_path.stem
+
             image_path = "{}/{}.png".format(self.image_dir_path, file_idx)
-            lidar_path = "{}/{}.bin".format(self.lidar_dir_path, file_idx)
+            lidar_path = "{}/{}.bin".format(self.pointcloud_dir_path, file_idx)
+            calib_path = "{}/{}.txt".format(self.calib_dir_path, file_idx)
 
-            gt_boxes_lidar = self.gt_infos[i]["annos"]["gt_boxes_lidar"]
-            gt_num = gt_boxes_lidar.shape[0]
-            gt_boxes_name = self.gt_infos[i]["annos"]["name"]
-
-            gt_class_id = []
-            for j in range(gt_num):
-                gt_class_id.append(int(cls_type_to_id(gt_boxes_name[j])))
-            gt_class_id = np.asarray(gt_class_id, dtype=np.int32).reshape(-1, 1) + 1
-            gt_boxes_lidar = np.concatenate((gt_boxes_lidar, gt_class_id, np.ones_like(gt_class_id)), axis=-1)
-
+            calib_path = Path(calib_path).resolve()
+            gt_boxes_lidar = self.kitti_object_to_pcdet_object(label_path, calib_path)
             image = cv2.imread(image_path)
-            pointcloud = np.fromfile(lidar_path, dtype=np.float32).reshape(-1, 4)
-
-            pred_info = self.pred_infos[i]
-            pred_info_id = []
-            for j in range(pred_info["name"].shape[0]):
-                pred_info_id.append(int(cls_type_to_id(pred_info["name"][j])))
-            pred_class_id = np.asarray(pred_info_id, dtype=np.int32) + 1 + 4
-
-            pred_boxes_lidar = np.concatenate((pred_info["boxes_lidar"],
-                                               pred_class_id.reshape(-1, 1),
-                                               pred_info["score"].reshape(-1, 1)), axis=-1)
-            self.publish_result(pointcloud, image, pred_bbxes=pred_boxes_lidar, gt_bbxes=gt_boxes_lidar)
+            pointcloud = load_pointcloud(lidar_path)
+            self.publish_result(pointcloud, image, pred_bbxes=None, gt_bbxes=gt_boxes_lidar)
 
             if self.auto_update:
                 time.sleep(self.update_time)
@@ -192,7 +216,7 @@ def ros2_wrapper():
 
 
 if __name__ == '__main__':
-    if ROS_VERSION == 1:
+    if __ROS_VERSION__ == 1:
         ros1_wrapper()
-    elif ROS_VERSION == 2:
+    elif __ROS_VERSION__ == 2:
         ros2_wrapper()

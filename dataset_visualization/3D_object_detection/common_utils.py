@@ -2,14 +2,14 @@ import colorsys
 
 import yaml
 from easydict import EasyDict
-from geometry_msgs.msg import Point
 
 from scipy.spatial.transform import Rotation
-from visualization_msgs.msg import Marker
+
 from pathlib import Path
 import pickle
 import numpy as np
 
+# isort: off
 try:
     import rospy
 
@@ -20,6 +20,11 @@ except:
 
     __ROS__VERSION__ = 2
 
+from visualization_msgs.msg import Marker
+from geometry_msgs.msg import Point
+
+
+# isort: on
 
 class Config:
     def __init__(self, kitti_cfg_file):
@@ -32,8 +37,10 @@ class Config:
 
         # DatasetParam
         self.dataset_dir = cfg_dict.DatasetParam.dataset_dir
-        self.gt_file = cfg_dict.DatasetParam.gt_file
-        self.predict_file = cfg_dict.DatasetParam.predict_file
+        self.image_dir_path = cfg_dict.DatasetParam.image_dir_path
+        self.pointcloud_dir_path = cfg_dict.DatasetParam.pointcloud_dir_path
+        self.label_dir_path = cfg_dict.DatasetParam.label_dir_path
+        self.calib_dir_path = cfg_dict.DatasetParam.calib_dir_path
 
         # ROSParam
         self.pointcloud_topic = cfg_dict.ROSParam.pointcloud_topic

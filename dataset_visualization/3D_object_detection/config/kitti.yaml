@@ -1,16 +1,18 @@
 DatasetParam:
-  dataset_dir: "/Dataset/Kitti/object/"
-  gt_file: "data/kitti_infos_val.pkl"
-  predict_file: "data/result.pkl"
+  dataset_dir: "/home/helios/mnt/dataset/Kitti/object/"
+  image_dir_path: "training/image_2"
+  pointcloud_dir_path: "training/velodyne"
+  label_dir_path: "training/label_2"
+  calib_dir_path: "training/calib"
 
 ROSParam:
-  pointcloud_topic: "/kitti/pointcloud"
-  image_topic: "/kitti/image"
-  bounding_box_topic: "/kitti/ground_truth"
+  pointcloud_topic: "/dataset/pointcloud"
+  image_topic: "/dataset/image"
+  bounding_box_topic: "/dataset/ground_truth"
   frame: "lidar"
 
 VisParam:
   # description: 自动还是手动触发显示数据（终端按回车键触发下一帧） True or False
   auto: True
   # description: 单位（秒）
-  update_time: 1
+  update_time: 0.5

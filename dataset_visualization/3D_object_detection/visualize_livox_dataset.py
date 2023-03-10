@@ -3,133 +3,197 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import rospy
-import std_msgs.msg
+
+# isort: off
+try:
+    import rospy
+
+    ROS_VERSION = 1
+
+
+    class Node:
+        def __init__(self, node_name):
+            rospy.init_node(node_name)
+except:
+    try:
+        import rclpy
+        from rclpy.node import Node
+        from rclpy.qos import QoSDurabilityPolicy, QoSProfile
+
+        ROS_VERSION = 2
+    except:
+        raise ImportError("Please install ROS2 or ROS1")
+
 from cv_bridge import CvBridge
-from dataset_utils.calibration_livox import Calibration
-from matplotlib import pyplot as plt
-from ros_numpy.point_cloud2 import (xyzi_numpy_to_pointcloud2,
-                                    xyzirgb_numpy_to_pointcloud2)
+import std_msgs.msg
 from sensor_msgs.msg import Image, PointCloud2
+from visualization_msgs.msg import MarkerArray
+# isort: on
+
+import common_utils
+from ampcl.calibration.calibration_livox import Calibration
+from ampcl.ros_utils import np_to_pointcloud2
+from matplotlib import pyplot as plt
 from tqdm import tqdm
+from ampcl.ros_utils import np_to_pointcloud2
+from ampcl.visualization import color_o3d_to_color_ros
 
 
-def bgr_to_hex(color_np):
-    """
-    Args:
-        color_np:{n,3} [b,g,r] (opencv)->[r,g,b] (rviz)
-    """
-    # b = color_np[:, 0]
-    # g = color_np[:, 1]
-    # r = color_np[:, 2]
-
-    rgb_channel = np.array((color_np[:, 2] << 16) | (color_np[:, 1] << 8) | \
-                           (color_np[:, 0] << 0), dtype=np.uint32)
-
-    rgb_channel = rgb_channel.view(np.float32)
-    return rgb_channel
+def cls_type_to_id(cls_type):
+    type_to_id = {'Car': 1, 'Pedestrian': 2, 'Cyclist': 3, 'Van': 4}
+    if cls_type not in type_to_id.keys():
+        return -1
+    return type_to_id[cls_type]
 
 
-class LivoxDataset():
-    def __init__(self, cal_path):
-        rospy.init_node('kitti_dataset', anonymous=False)
+class Visualization(Node):
+    def __init__(self):
+        super().__init__("visualization")
+        cfg = common_utils.Config("config/livox.yaml")
 
-        self.cal = Calibration(cal_path)
-        self.pointcloud_pub = rospy.Publisher("/kitti_dataset/pointcloud", PointCloud2, queue_size=1)
-        self.img_pub = rospy.Publisher("/kitti_dataset/image", Image, queue_size=1)
+        # ROS
+        if ROS_VERSION == 1:
+            self.pointcloud_pub = rospy.Publisher(cfg.pointcloud_topic, PointCloud2, queue_size=1, latch=True)
+            self.img_pub = rospy.Publisher(cfg.image_topic, Image, queue_size=1, latch=True)
+            self.bbx_pub = rospy.Publisher(cfg.bounding_box_topic, MarkerArray, queue_size=5, latch=True)
+        if ROS_VERSION == 2:
+            latching_qos = QoSProfile(depth=10, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+            self.pointcloud_pub = self.create_publisher(PointCloud2, cfg.pointcloud_topic, latching_qos)
+            self.img_pub = self.create_publisher(Image, cfg.image_topic, latching_qos)
+            self.bbx_pub = self.create_publisher(MarkerArray, cfg.bounding_box_topic, latching_qos)
 
+        self.frame = cfg.frame
         self.bridge = CvBridge()
-        self.stamp = rospy.Time.now()
 
-        # pointcloud range
-        self.limit_range = [0, -40, -3, 70, 50, 1]
+        # Data
+        dataset_dir = Path(cfg.dataset_dir)
+        gt_file = Path(cfg.gt_file).resolve()
+        predict_file = Path(cfg.predict_file).resolve()
+        self.gt_infos = common_utils.open_pkl_file(gt_file)
+        self.pred_infos = common_utils.open_pkl_file(predict_file)
+        self.image_dir_path = str(dataset_dir / "training/image")
+        self.lidar_dir_path = str(dataset_dir / "training/lidar")
 
-    def mask_points_by_range(self, points, limit_range):
-        mask = (points[:, 0] >= limit_range[0]) & (points[:, 0] <= limit_range[3]) \
-               & (points[:, 1] >= limit_range[1]) & (points[:, 1] <= limit_range[4]) \
-               & (points[:, 2] >= limit_range[2]) & (points[:, 2] <= limit_range[5])
-        return mask
+        # Visualization
+        self.auto_update = cfg.auto_update
+        self.update_time = cfg.update_time
 
-    def mask_outliers(self, pointcloud):
-        """
-        mask dead region and outliers
-        Args:
-            pointcloud:
-        """
-        mask = ~((pointcloud[:, 0] == 0) & (pointcloud[:, 1] == 0) & (pointcloud[:, 2] == 0) | (
-                (np.abs(pointcloud[:, 0]) < 2.0) & (np.abs(pointcloud[:, 1] < 1.5))))
-        return mask
+        self.last_box_num = 0
+        self.iter_dataset()
 
-    def paint_pointcloud(self, pointcloud, image):
-        # step1: passthrough filter
-        pointcloud = pointcloud[self.mask_points_by_range(pointcloud, self.limit_range)]
-        pointcloud = pointcloud[self.mask_outliers(pointcloud)][:, :4]
+    def publish_result(self, pointcloud, img, pred_bbxes=None, gt_bbxes=None):
 
-        # step2: project the point onto image
-        proj_img, depth_camera = self.cal.lidar_to_img(pointcloud[:, :3])
+        frame = "lidar"
+        if ROS_VERSION == 1:
+            stamp = rospy.Time.now()
+        if ROS_VERSION == 2:
+            stamp = self.get_clock().now().to_msg()
 
-        # undistort the image
-        image = cv2.undistort(src=image, cameraMatrix=self.cal.intri_matrix, distCoeffs=self.cal.distor)
-
-        # step3: remove the points which are out of the image
-        H = image.shape[0]
-        W = image.shape[1]
-        point_in_image_mask = (proj_img[:, 0] >= 0) & (proj_img[:, 0] < W) & \
-                              (proj_img[:, 1] >= 0) & (proj_img[:, 1] < H)
-
-        proj_img = proj_img[point_in_image_mask]
-        pointcloud = pointcloud[point_in_image_mask]
-
-        # step4: index the color of the points
-        bgr_channels = image[np.int_(proj_img[:, 1]), np.int_(proj_img[:, 0])].astype(np.uint32)  # H, W
-        hex_channels = bgr_to_hex(bgr_channels)
-        pointcloud = np.concatenate((pointcloud[:, :4], hex_channels.reshape(-1, 1)), axis=-1)
-        self.publish_pointcloud(pointcloud, color=True)
-        self.publish_img(image)
-
-    def publish_pointcloud(self, pointcloud_np, color=False):
         header = std_msgs.msg.Header()
-        header.stamp = self.stamp
-        header.frame_id = "livox_frame"
+        header.stamp = stamp
+        header.frame_id = frame
 
-        if color:
-            pointcloud_msg = xyzirgb_numpy_to_pointcloud2(pointcloud_np, header)
-        else:
-            pointcloud_msg = xyzi_numpy_to_pointcloud2(pointcloud_np, header)
+        img_msg = self.bridge.cv2_to_imgmsg(cvim=img, encoding="passthrough")
+        img_msg.header.stamp = stamp
+        img_msg.header.frame_id = frame
+
+        # bbxes = np.vstack(pred_bbxes, gt_bbxes)
+        bbxes = np.vstack(gt_bbxes)
+
+        all_colors = common_utils.generate_colors()
+
+        box_marker_array = MarkerArray()
+        colors_np = np.full((pointcloud.shape[0], 3), np.array([0.8, 0.8, 0.8]))
+        if bbxes.shape[0] > 0:
+            for i in range(bbxes.shape[0]):
+                box = bbxes[i]
+                cls_id = int(box[7])
+                box_color = common_utils.id_to_color(cls_id)
+                box_marker = common_utils.create_bounding_box_marker(box, stamp, i, box_color, frame_id="lidar")
+                box_marker_array.markers.append(box_marker)
+                if cls_id == 2:
+                    model_marker = common_utils.create_bounding_box_model(box, stamp, i, frame_id="lidar")
+                    box_marker_array.markers.append(model_marker)
+
+                # 追加颜色
+                point_color = all_colors[cls_id % len(all_colors)]
+                indices_points_inside = common_utils.get_indices_of_points_inside(pointcloud, box)
+                colors_np[indices_points_inside] = point_color
+
+        # clear history marker （RViz中的marker是追加的，取非替换或设置显示时间否则会残留）
+        if self.last_box_num > 0:
+            empty_marker_array = MarkerArray()
+            for i in range(self.last_box_num):
+                empty_shape_marker = common_utils.clear_bounding_box_marker(stamp, i, ns="shape", frame_id="lidar")
+                empty_marker_array.markers.append(empty_shape_marker)
+                empty_model_marker = common_utils.clear_bounding_box_marker(stamp, i, ns="model", frame_id="lidar")
+                empty_marker_array.markers.append(empty_model_marker)
+            self.bbx_pub.publish(empty_marker_array)
+        self.last_box_num = bbxes.shape[0]
+
+        colors_ros = color_o3d_to_color_ros(colors_np)
+        pointcloud = np.column_stack((pointcloud, colors_ros))
+        pointcloud_msg = np_to_pointcloud2(pointcloud, header, field="xyzirgb")
+
+        self.bbx_pub.publish(box_marker_array)
         self.pointcloud_pub.publish(pointcloud_msg)
-
-    def publish_img(self, img_np):
-        img_msg = self.bridge.cv2_to_imgmsg(cvim=img_np, encoding="passthrough")
-        img_msg.header.stamp = self.stamp
-        img_msg.header.frame_id = "livox"
         self.img_pub.publish(img_msg)
+
+    def iter_dataset(self):
+
+        for i in range(len(self.gt_infos)):
+            if ROS_VERSION == 1 and rospy.is_shutdown():
+                exit(0)
+            if ROS_VERSION == 2 and not rclpy.ok():
+                exit(0)
+
+            file_idx = self.gt_infos[i]['point_cloud']['lidar_idx']
+            image_path = "{}/{}.png".format(self.image_dir_path, file_idx)
+            lidar_path = "{}/{}.bin".format(self.lidar_dir_path, file_idx)
+
+            gt_boxes_lidar = self.gt_infos[i]["annos"]["gt_boxes_lidar"]
+            gt_num = gt_boxes_lidar.shape[0]
+            gt_boxes_name = self.gt_infos[i]["annos"]["name"]
+
+            gt_class_id = []
+            for j in range(gt_num):
+                gt_class_id.append(int(cls_type_to_id(gt_boxes_name[j])))
+            gt_class_id = np.asarray(gt_class_id, dtype=np.int32).reshape(-1, 1) + 1
+            gt_boxes_lidar = np.concatenate((gt_boxes_lidar, gt_class_id, np.ones_like(gt_class_id)), axis=-1)
+
+            image = cv2.imread(image_path)
+            pointcloud = np.fromfile(lidar_path, dtype=np.float32).reshape(-1, 4)
+
+            pred_info = self.pred_infos[i]
+            pred_info_id = []
+            for j in range(pred_info["name"].shape[0]):
+                pred_info_id.append(int(cls_type_to_id(pred_info["name"][j])))
+            pred_class_id = np.asarray(pred_info_id, dtype=np.int32) + 1 + 4
+
+            pred_boxes_lidar = np.concatenate((pred_info["boxes_lidar"],
+                                               pred_class_id.reshape(-1, 1),
+                                               pred_info["score"].reshape(-1, 1)), axis=-1)
+            self.publish_result(pointcloud, image, pred_bbxes=pred_boxes_lidar, gt_bbxes=gt_boxes_lidar)
+
+            if self.auto_update:
+                time.sleep(self.update_time)
+            else:
+                input()
+
+def ros1_wrapper():
+    Visualization(Node)
+
+
+def ros2_wrapper():
+    rclpy.init()
+    node = Visualization()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
 
 
 if __name__ == '__main__':
-    cal_cfg = "config.txt"
-    livox_dataset = LivoxDataset(cal_cfg)
-    dataset_path = Path("kitti_dataset/training")
-
-    r = rospy.Rate(10)
-    while not rospy.is_shutdown():
-
-        image_dir_path = str(dataset_path / "image")
-        lidar_dir_path = str(dataset_path / "lidar")
-        images = sorted(os.listdir(image_dir_path))
-        lidars = sorted(os.listdir(lidar_dir_path))
-
-        if len(images) != len(lidars):
-            print("Number of image files != number of pcd files, please check")
-            exit(1)
-
-        for idx in tqdm(range(len(images))):
-            if rospy.is_shutdown():
-                break
-            image_path = "{}/{:0>6d}.jpg".format(image_dir_path, idx)
-            lidar_path = "{}/{:0>6d}.bin".format(lidar_dir_path, idx)
-            image = cv2.imread(image_path)
-            pointcloud = np.fromfile(lidar_path, dtype=np.float32).reshape(-1, 4)
-            livox_dataset.stamp = rospy.Time.now()
-            livox_dataset.paint_pointcloud(pointcloud, image)
-            print(f"current is {idx}")
-        r.sleep()
+    if ROS_VERSION == 1:
+        ros1_wrapper()
+    elif ROS_VERSION == 2:
+        ros2_wrapper()
