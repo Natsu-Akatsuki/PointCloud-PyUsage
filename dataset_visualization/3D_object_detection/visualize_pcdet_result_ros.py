@@ -1,17 +1,37 @@
 import time
 from pathlib import Path
 
-import common_utils
 import cv2
 import numpy as np
-import rclpy
-import std_msgs.msg
+
+import common_utils
 from common_utils import clear_bounding_box_marker
+
+# isort: off
+try:
+    import rospy
+
+    ROS_VERSION = 1
+
+
+    class Node:
+        def __init__(self, node_name):
+            rospy.init_node(node_name)
+except:
+    try:
+        import rclpy
+        from rclpy.node import Node
+        from rclpy.qos import QoSDurabilityPolicy, QoSProfile
+        ROS_VERSION = 2
+    except:
+        raise ImportError("Please install ROS2 or ROS1")
+
 from cv_bridge import CvBridge
-from rclpy.node import Node
-from rclpy.qos import QoSDurabilityPolicy, QoSProfile
+import std_msgs.msg
 from sensor_msgs.msg import Image, PointCloud2
 from visualization_msgs.msg import MarkerArray
+# isort: on
+
 
 from ampcl.ros_utils import np_to_pointcloud2
 from ampcl.visualization import color_o3d_to_color_ros
@@ -30,10 +50,16 @@ class Visualization(Node):
         cfg = common_utils.Config("config/kitti.yaml")
 
         # ROS
-        latching_qos = QoSProfile(depth=10, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
-        self.pointcloud_pub = self.create_publisher(PointCloud2, cfg.pointcloud_topic, latching_qos)
-        self.img_pub = self.create_publisher(Image, cfg.image_topic, latching_qos)
-        self.bbx_pub = self.create_publisher(MarkerArray, cfg.bounding_box_topic, latching_qos)
+        if ROS_VERSION == 1:
+            self.pointcloud_pub = rospy.Publisher(cfg.pointcloud_topic, PointCloud2, queue_size=1, latch=True)
+            self.img_pub = rospy.Publisher(cfg.image_topic, Image, queue_size=1, latch=True)
+            self.bbx_pub = rospy.Publisher(cfg.bounding_box_topic, MarkerArray, queue_size=5, latch=True)
+        if ROS_VERSION == 2:
+            latching_qos = QoSProfile(depth=10, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+            self.pointcloud_pub = self.create_publisher(PointCloud2, cfg.pointcloud_topic, latching_qos)
+            self.img_pub = self.create_publisher(Image, cfg.image_topic, latching_qos)
+            self.bbx_pub = self.create_publisher(MarkerArray, cfg.bounding_box_topic, latching_qos)
+
         self.frame = cfg.frame
         self.bridge = CvBridge()
 
@@ -56,7 +82,11 @@ class Visualization(Node):
     def publish_result(self, pointcloud, img, pred_bbxes=None, gt_bbxes=None):
 
         frame = "lidar"
-        stamp = self.get_clock().now().to_msg()
+        if ROS_VERSION == 1:
+            stamp = rospy.Time.now()
+        if ROS_VERSION == 2:
+            stamp = self.get_clock().now().to_msg()
+
         header = std_msgs.msg.Header()
         header.stamp = stamp
         header.frame_id = frame
@@ -67,6 +97,7 @@ class Visualization(Node):
 
         # bbxes = np.vstack(pred_bbxes, gt_bbxes)
         bbxes = np.vstack(gt_bbxes)
+
         all_colors = common_utils.generate_colors()
 
         box_marker_array = MarkerArray()
@@ -109,7 +140,9 @@ class Visualization(Node):
     def iter_dataset(self):
 
         for i in range(len(self.gt_infos)):
-            if not rclpy.ok():
+            if ROS_VERSION == 1 and rospy.is_shutdown():
+                exit(0)
+            if ROS_VERSION == 2 and not rclpy.ok():
                 exit(0)
 
             file_idx = self.gt_infos[i]['point_cloud']['lidar_idx']
@@ -146,9 +179,20 @@ class Visualization(Node):
                 input()
 
 
-if __name__ == '__main__':
+def ros1_wrapper():
+    Visualization(Node)
+
+
+def ros2_wrapper():
     rclpy.init()
     node = Visualization()
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    if ROS_VERSION == 1:
+        ros1_wrapper()
+    elif ROS_VERSION == 2:
+        ros2_wrapper()
