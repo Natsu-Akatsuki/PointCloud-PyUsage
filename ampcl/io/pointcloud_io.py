@@ -1,3 +1,4 @@
+import argparse
 from pathlib import Path
 
 import numpy as np
@@ -143,3 +144,22 @@ def load_pointcloud(file_name, is_read_only=False):
         pointcloud = pointcloud.copy()
 
     return pointcloud
+
+
+def convert_pointcloud(input_file_name, export_type):
+    pc = load_pointcloud(input_file_name)
+    output_file_name = str(Path(input_file_name).parent / Path(input_file_name).stem) + ".convert." + f"{export_type}"
+    save_pointcloud(pc, output_file_name)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("name", action="store", help="pointcloud file name")
+    parser.add_argument('-t', '--type', type=str, default='pcd', help='specify the type of export file')
+    args = parser.parse_args()
+
+    convert_pointcloud(args.name, args.type)
+
+
+if __name__ == '__main__':
+    main()

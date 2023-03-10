@@ -29,6 +29,7 @@ dependencies = [
 
 [project.scripts]
 o3d_viewer = "ampcl.visualization.o3d_viewer:main"
+convert_pointcloud = "ampcl.io.pointcloud_io:main"
 
 [project.urls]
 "Homepage" = "https://github.com/Natsu-Akatsuki/PointCloud-PyUsage"

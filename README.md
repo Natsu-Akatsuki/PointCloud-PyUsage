@@ -108,6 +108,17 @@ $ o3d_viewer -n <pointcloud_file>
 <p align="center">
 <img src="https://natsu-akatsuki.oss-cn-guangzhou.aliyuncs.com/img/image-20221020191241065.png" alt="img" width=80% height=80% />
 </p>
+### 点云类型转换
+
+> **Note**
+> 现仅支持读取字段为xyzi，格式为npy, pcd, bin的点云
+
+```bash
+# 默认转换为pcd
+$ convert_pointcloud <点云文件名>
+# 指定导出为npy格式
+$ convert_pointcloud -t npy <点云文件名>
+```
 
 ## BUG
 
