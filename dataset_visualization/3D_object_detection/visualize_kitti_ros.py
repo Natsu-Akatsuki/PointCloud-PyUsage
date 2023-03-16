@@ -2,11 +2,10 @@ import os
 import time
 from pathlib import Path
 
+import common_utils
 import cv2
 import numpy as np
 from tqdm import tqdm
-
-import common_utils
 
 # isort: off
 try:
@@ -31,7 +30,7 @@ except:
 from cv_bridge import CvBridge
 import std_msgs.msg
 from sensor_msgs.msg import Image, PointCloud2
-from visualization_msgs.msg import MarkerArray
+from visualization_msgs.msg import Marker, MarkerArray
 # isort: on
 
 from ampcl.calibration.calibration_kitti import Calibration
@@ -78,7 +77,6 @@ class Visualization(Node):
         self.auto_update = cfg.auto_update
         self.update_time = cfg.update_time
 
-        self.last_box_num = 0
         self.iter_dataset_with_kitti_label()
 
     def publish_result(self, pointcloud, img, pred_bbxes=None, gt_bbxes=None):
@@ -105,6 +103,9 @@ class Visualization(Node):
         box_marker_array = MarkerArray()
         colors_np = np.full((pointcloud.shape[0], 3), np.array([0.8, 0.8, 0.8]))
         if bbxes.shape[0] > 0:
+            empty_marker = Marker()
+            empty_marker.action = Marker.DELETEALL
+            box_marker_array.markers.append(empty_marker)
             for i in range(bbxes.shape[0]):
                 box = bbxes[i]
                 cls_id = int(box[7])
@@ -112,24 +113,13 @@ class Visualization(Node):
                 box_marker = common_utils.create_bounding_box_marker(box, stamp, i, box_color, frame_id="lidar")
                 box_marker_array.markers.append(box_marker)
                 if cls_id == 2:
-                    model_marker = common_utils.create_bounding_box_model(box, stamp, i, frame_id="lidar")
+                    model_marker = common_utils.create_bounding_box_model(box, stamp, i, frame_id=self.frame)
                     box_marker_array.markers.append(model_marker)
 
                 # 追加颜色
                 point_color = all_colors[cls_id % len(all_colors)]
                 indices_points_inside = common_utils.get_indices_of_points_inside(pointcloud, box, margin=0.1)
                 colors_np[indices_points_inside] = point_color
-
-        # clear history marker （RViz中的marker是追加的，取非替换或设置显示时间否则会残留）
-        if self.last_box_num > 0:
-            empty_marker_array = MarkerArray()
-            for i in range(self.last_box_num):
-                empty_shape_marker = common_utils.clear_bounding_box_marker(stamp, i, ns="shape", frame_id="lidar")
-                empty_marker_array.markers.append(empty_shape_marker)
-                empty_model_marker = common_utils.clear_bounding_box_marker(stamp, i, ns="model", frame_id="lidar")
-                empty_marker_array.markers.append(empty_model_marker)
-            self.bbx_pub.publish(empty_marker_array)
-        self.last_box_num = bbxes.shape[0]
 
         colors_ros = color_o3d_to_color_ros(colors_np)
         pointcloud = np.column_stack((pointcloud, colors_ros))
