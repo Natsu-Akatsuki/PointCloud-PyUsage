@@ -2,9 +2,10 @@ import pickle
 from pathlib import Path
 
 import numpy as np
-from dataset_utils.calibration_kitti import Calibration
-from dataset_utils.object3d_kitti import get_objects_from_label
+from ampcl.calibration.calibration_livox import LivoxCalibration
+from ampcl.calibration.object3d_kitti import get_objects_from_label
 from open3d_vis_utils import draw_scenes
+import common_utils
 
 
 def vis_pcdet_kitti_result():
@@ -25,16 +26,16 @@ def vis_kitti_label():
 
 
 def generate_pcd_info():
-    file_path = 'data/velodyne/000000.bin'
-    cal_path = 'data/calib/000000.txt'
-    label_path = 'data/label_2/000000.txt'
+    file_path = '/home/helios/mnt/dataset/livox_dataset/training/lidar/000000.bin'
+    cal_path = "/home/helios/mnt/dataset/livox_dataset/training/calib/config.txt"
+    label_path = "/home/helios/Github/workspace/livox_detection/0.txt"
 
     file_path = Path(file_path).resolve()
     pointcloud = np.fromfile(str(file_path), dtype=np.float32).reshape(-1, 4)[:, 0:3]
     label_path = Path(label_path).resolve()
     cal_path = Path(cal_path).resolve()
     obj_list = get_objects_from_label(label_path)
-    calib = Calibration(cal_path)
+    calib = LivoxCalibration(cal_path)
 
     annotations = {}
     annotations['name'] = np.array([obj.cls_type for obj in obj_list])
@@ -55,7 +56,7 @@ def generate_pcd_info():
     loc = annotations['location'][:num_objects]  # x,y,z
     dims = annotations['dimensions'][:num_objects]  # l,w,h
     rots = annotations['rotation_y'][:num_objects]  # yaw
-    loc_lidar = calib.rect_to_lidar(loc)  # points from camera frame->lidar frame
+    loc_lidar = calib.camera_to_lidar_points(loc)  # points from camera frame->lidar frame
 
     l, h, w = dims[:, 0:1], dims[:, 1:2], dims[:, 2:3]
     loc_lidar[:, 2] += h[:, 0] / 2  # btn center->geometry center
@@ -65,23 +66,15 @@ def generate_pcd_info():
 
 
 def remove_foreground_point():
-    import numpy as np
-    import torch
-    from ops.roiaware_pool3d import roiaware_pool3d_utils
+    bbxes, pointcloud = generate_pcd_info()
+    mask = np.zeros(pointcloud.shape[0], dtype=np.bool_)
+    for i in range(bbxes.shape[0]):
+        box = bbxes[i]
+        indices_points_inside = common_utils.get_indices_of_points_inside(pointcloud, box, margin=0.1)
+        mask[indices_points_inside] = True
 
-    gt_boxes_lidar, pointcloud = generate_pcd_info()
-
-    box_idxs_of_pts = roiaware_pool3d_utils.points_in_boxes_gpu(
-        torch.from_numpy(pointcloud[:, 0:3]).unsqueeze(dim=0).float().cuda(),
-        torch.from_numpy(gt_boxes_lidar[:, 0:7]).unsqueeze(dim=0).float().cuda()
-    ).long().squeeze(dim=0).cpu().numpy()
-
-    mask = np.ones(pointcloud.shape[0], dtype=np.bool_)
-    for i in range(gt_boxes_lidar.shape[0]):
-        mask[box_idxs_of_pts == i] = False
     pointcloud = pointcloud[mask]
-
-    draw_scenes(pointcloud[:, :3])
+    draw_scenes(pointcloud[:, :3], gt_boxes=bbxes)
 
 
 if __name__ == '__main__':

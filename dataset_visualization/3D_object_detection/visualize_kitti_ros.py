@@ -36,7 +36,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from ampcl.calibration.calibration_kitti import Calibration
 from ampcl.calibration.object3d_kitti import get_objects_from_label
 from ampcl.io import load_pointcloud
-from ampcl.ros_utils import np_to_pointcloud2
+from ampcl.ros import np_to_pointcloud2
 from ampcl.visualization import color_o3d_to_color_ros
 
 

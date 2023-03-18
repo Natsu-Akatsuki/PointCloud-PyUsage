@@ -6,12 +6,15 @@ DatasetParam:
   pointcloud_dir_path: "training/horizon"
   label_dir_path: "training/label_2"
   calib_dir_path: "training/calib"
+  prediction_dir_path: "training/prediction"
 
 ROSParam:
-  pointcloud_topic: "/dataset/pointcloud"
-  image_topic: "/dataset/image"
-  bounding_box_topic: "/dataset/ground_truth"
-  frame: "lidar"
+  vanilla_pointcloud_topic: "/gt/pointcloud/vanilla"
+  color_pointcloud_topic: "/gt/pointcloud/color"
+  img_plus_box2d_topic: "/gt/img/plus_box2d"
+  img_plus_box3d_topic: "/gt/img/plus_box3d"
+  box3d_topic: "/box3d_marker"
+  frame: "livox_frame"
 
 VisParam:
   # description: 自动还是手动触发显示数据（终端按回车键触发下一帧） True or False

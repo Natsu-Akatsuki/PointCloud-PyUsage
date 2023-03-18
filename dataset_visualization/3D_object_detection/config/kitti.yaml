@@ -6,8 +6,10 @@ DatasetParam:
   calib_dir_path: "training/calib"
 
 ROSParam:
-  pointcloud_topic: "/dataset/pointcloud"
-  image_topic: "/dataset/image"
+  pointcloud_topic: "/dataset/pointcloud/segmentation"
+  color_pointcloud_topic: "/dataset/pointcloud/color"
+  image_plus_box2d_topic: "/dataset/image/plus_box2d"
+  image_plus_box3d_topic: "/dataset/image/plus_box3d"
   bounding_box_topic: "/dataset/ground_truth"
   frame: "lidar"
 
@@ -15,4 +17,4 @@ VisParam:
   # description: 自动还是手动触发显示数据（终端按回车键触发下一帧） True or False
   auto: True
   # description: 单位（秒）
-  update_time: 0.5
+  update_time: 0.1
