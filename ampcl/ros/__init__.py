@@ -12,7 +12,6 @@ except:
     except:
         raise ImportError("Please install ROS2 or ROS1")
 
-
 def pointcloud2_to_np(pointcloud2, remove_nans=True, field="xyzi"):
     if field == "xyz":
         return pointcloud2_to_xyz_array(pointcloud2, remove_nans=remove_nans).astype(np.float32)
