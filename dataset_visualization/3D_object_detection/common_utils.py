@@ -30,7 +30,7 @@ class Config:
         self.img_plus_box2d_topic = cfg_dict.ROSParam.img_plus_box2d_topic
         self.img_plus_box3d_topic = cfg_dict.ROSParam.img_plus_box3d_topic
         self.box3d_topic = cfg_dict.ROSParam.box3d_topic
-        self.frame = cfg_dict.ROSParam.frame
+        self.frame_id = cfg_dict.ROSParam.frame_id
 
         # VisParam
         self.auto_update = cfg_dict.VisParam.auto

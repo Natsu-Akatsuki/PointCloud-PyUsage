@@ -1,4 +1,6 @@
 # isort: off
+from ampcl.filter import c_ransac_plane_fitting, passthrough_filter
+
 try:
     import rospy
 
@@ -35,9 +37,10 @@ from ampcl.calibration import calibration_template
 from ampcl.calibration.calibration_livox import LivoxCalibration
 from ampcl.calibration.object3d_kitti import get_objects_from_label
 from ampcl.io import load_pointcloud
-from ampcl.ros import np_to_pointcloud2
-from ampcl.ros.marker import create_marker
+from ampcl.ros import np_to_pointcloud2, marker
 from ampcl.visualization import color_o3d_to_color_ros
+from ampcl.perception.ground_segmentation import ground_segmentation_ransac
+from ampcl import perception
 from tqdm import tqdm
 from ab3dmot import AB3DMOT
 
@@ -47,6 +50,17 @@ class Visualization(Node):
         super().__init__("visualization")
         cfg = common_utils.Config("config/livox.yaml")
 
+        # Data
+        dataset_dir = Path(cfg.dataset_dir)
+        self.image_dir_path = dataset_dir / Path(cfg.image_dir_path)
+        self.pointcloud_dir_path = dataset_dir / cfg.pointcloud_dir_path
+        self.label_dir_path = dataset_dir / cfg.label_dir_path
+        self.prediction_dir_path = dataset_dir / cfg.prediction_dir_path
+        self.calib_dir_path = dataset_dir / cfg.calib_dir_path
+        self.frame_id = cfg.frame_id
+        self.limit_range = (0, 99.6, -44.8, 44.8, -2, 2)
+        self.do_track = False
+
         # ROS
         if __ROS_VERSION__ == 1:
             self.pointcloud_pub = rospy.Publisher(cfg.pointcloud_topic, PointCloud2, queue_size=1, latch=True)
@@ -55,21 +69,18 @@ class Visualization(Node):
         if __ROS_VERSION__ == 2:
             latching_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
             self.vanilla_pointcloud_pub = self.create_publisher(PointCloud2, cfg.vanilla_pointcloud_topic, latching_qos)
+            self.vanilla_pointcloud_out_pub = self.create_publisher(PointCloud2, "/gt/pointcloud/vanilla/out",
+                                                                    latching_qos)
             self.color_pointcloud_pub = self.create_publisher(PointCloud2, cfg.color_pointcloud_topic, latching_qos)
             self.img_plus_box2d_pub = self.create_publisher(Image, cfg.img_plus_box2d_topic, latching_qos)
             self.img_plus_box3d_pub = self.create_publisher(Image, cfg.img_plus_box3d_topic, latching_qos)
             self.box3d_pub = self.create_publisher(MarkerArray, cfg.box3d_topic, latching_qos)
 
-        self.frame = cfg.frame
-        self.bridge = CvBridge()
+            distance_marker = marker.create_distance_marker(frame_id=self.frame_id, distance_delta=10)
+            distance_marker_pub = self.create_publisher(MarkerArray, "/debug/distance_marker", latching_qos)
+            distance_marker_pub.publish(distance_marker)
 
-        # Data
-        dataset_dir = Path(cfg.dataset_dir)
-        self.image_dir_path = dataset_dir / Path(cfg.image_dir_path)
-        self.pointcloud_dir_path = dataset_dir / cfg.pointcloud_dir_path
-        self.label_dir_path = dataset_dir / cfg.label_dir_path
-        self.prediction_dir_path = dataset_dir / cfg.prediction_dir_path
-        self.calib_dir_path = dataset_dir / cfg.calib_dir_path
+        self.bridge = CvBridge()
 
         # Visualization
         self.auto_update = cfg.auto_update
@@ -173,11 +184,38 @@ class Visualization(Node):
                 cv2.rectangle(image, (x1, y1), (x2, y2), box_color, 2)
         return image
 
+    def track(self, detections):
+        trackers = np.zeros((0, 9))
+        object_classes = [1, 2, 3]
+        object_trackers = [self.car_tracker, self.pedestrian_tracker, self.cyclist_tracker]
+        for i, obj_class in enumerate(object_classes):
+            obj_trackers, _ = object_trackers[i].track(detections[detections[:, 7] == obj_class][:, :7])
+            if len(obj_trackers) != 0:
+                obj_trackers = np.hstack(
+                    (np.array(obj_trackers).reshape(-1, 8),
+                     np.full(len(obj_trackers), fill_value=obj_class).reshape(-1, 1)))
+                obj_trackers[:, 7], obj_trackers[:, 8] = obj_trackers[:, 8].copy(), obj_trackers[:, 7].copy()
+                trackers = np.vstack((trackers, obj_trackers))
+        return trackers
+
+    def box3d_kitti_to_lidar(self, box3d_kitti):
+        h = box3d_kitti[:, 0].reshape(-1, 1)
+        w = box3d_kitti[:, 1].reshape(-1, 1)
+        l = box3d_kitti[:, 2].reshape(-1, 1)
+        loc = box3d_kitti[:, 3:6]
+        rots = box3d_kitti[:, 6].reshape(-1, 1)
+        gt_class_id = box3d_kitti[:, 7].reshape(-1, 1)
+        tracker_id = box3d_kitti[:, 8].reshape(-1, 1)
+
+        # Adjust the height of the box
+        loc_lidar = calibration_template.camera_to_lidar_points(loc, self.cal_info)
+        loc_lidar[:, 2] += h[:, 0] / 2
+        box3d_lidar = np.concatenate([loc_lidar, l, w, h, -(np.pi / 2 + rots), gt_class_id, tracker_id], axis=1)
+        return box3d_lidar
+
     def publish_dataset(self, pointcloud, img, gt_infos, prediction_infos):
 
-        gt_boxes_lidar = gt_infos['boxes3d_lidar']
-        gt_boxes2d = gt_infos['boxes2d']
-        proj_corners3d_list = gt_infos['proj_corners3d_list']
+        gt_box3d_lidar = gt_infos['box3d_lidar']
 
         if __ROS_VERSION__ == 1:
             stamp = rospy.Time.now()
@@ -186,52 +224,61 @@ class Visualization(Node):
 
         header = std_msgs.msg.Header()
         header.stamp = stamp
-        header.frame_id = self.frame
+        header.frame_id = self.frame_id
 
         # 图像+2D框
-        img_plus_box2d = self.paint_box2d(img.copy(), gt_boxes2d, cls_indices=gt_boxes_lidar[:, 7])
+        gt_box2d = prediction_infos['box2d']
+        gt_box3d = prediction_infos['box3d_lidar']
+        img_plus_box2d = self.paint_box2d(img.copy(), gt_box2d, cls_indices=gt_box3d[:, 7])
         img_msg = self.bridge.cv2_to_imgmsg(cvim=img_plus_box2d, encoding="passthrough")
         img_msg.header.stamp = stamp
-        img_msg.header.frame_id = self.frame
+        img_msg.header.frame_id = self.frame_id
         self.img_plus_box2d_pub.publish(img_msg)
 
         # 图像+投影三维框
-        img_plus_box3d = self.paint_box3d(img.copy(), proj_corners3d_list, cls_indices=gt_boxes_lidar[:, 7])
+        proj_corners3d_list = prediction_infos['proj_corners3d_list']
+        img_plus_box3d = self.paint_box3d(img.copy(), proj_corners3d_list, cls_indices=gt_box3d[:, 7])
         img_msg = self.bridge.cv2_to_imgmsg(cvim=img_plus_box3d, encoding="passthrough")
         img_msg.header.stamp = stamp
-        img_msg.header.frame_id = self.frame
+        img_msg.header.frame_id = self.frame_id
         self.img_plus_box3d_pub.publish(img_msg)
 
         # 彩色点云
         self.pub_color_pointcloud_ros(header, pointcloud, img)
 
-        # 跟踪
-        # cat_trackers, _ = self.car_tracker.track(gt_boxes_lidar[gt_boxes_lidar[:, 7] == 1][:, :7])
-        # pedestrian_trackers, _ = self.pedestrian_tracker.track(gt_boxes_lidar[gt_boxes_lidar[:, 7] == 2][:, :7])
-        # cyclist_trackers, _ = self.cyclist_tracker.track(gt_boxes_lidar[gt_boxes_lidar[:, 7] == 3][:, :7])
+        # 跟踪真值数据
+        if self.do_track:
+            if 1:
+                detections = gt_infos['box3d_camera']
+            else:
+                detections = prediction_infos['box3d_camera']
+            trackers = self.track(detections)
+            trackers = self.box3d_kitti_to_lidar(trackers)
 
-        # 将每一类别的跟踪结果进行合并
-        # trackers = np.concatenate((cat_trackers, pedestrian_trackers, cyclist_trackers), axis=0)
-
-        # 点云+3D框
-        boxes = gt_boxes_lidar
-        box_marker_array = MarkerArray()
+        # 背景点，e.g. 地面点
         colors_np = np.full((pointcloud.shape[0], 3), np.array([0.8, 0.8, 0.8]))
-        if boxes.shape[0] > 0:
-            empty_marker = Marker()
-            empty_marker.action = Marker.DELETEALL
-            box_marker_array.markers.append(empty_marker)
-            for i in range(boxes.shape[0]):
-                box = boxes[i]
-                cls_id = int(box[7])
-                box_color = common_utils.id_to_color(cls_id)
+        limit_range = (0, 50, -10, 10, -2.5, -1.0)
+        _, ground_idx = ground_segmentation_ransac(pointcloud, limit_range, distance_threshold=0.5, debug=False)
+        colors_np[ground_idx] = [0.61, 0.46, 0.33]
 
-                indices_points_inside = filter.get_indices_of_points_inside(pointcloud, box, margin=0.1)
-                marker_dict = create_marker.create_bounding_box_marker(
-                    box, stamp, frame_id=self.frame,
-                    box_ns="shape", box_color=box_color, box_id=i,
-                    track_ns="track", track_id=None,
-                    confidence_ns="confidence", confidence=None)
+        # box3d marker: gt for detection
+        box_marker_array = MarkerArray()
+        empty_marker = Marker()
+        empty_marker.action = Marker.DELETEALL
+        box_marker_array.markers.append(empty_marker)
+
+        box3d_lidar = gt_box3d_lidar
+        if box3d_lidar.shape[0] > 0:
+            for i in range(box3d_lidar.shape[0]):
+                box3d = box3d_lidar[i]
+                cls_id = int(box3d[7])
+                if cls_id == -1:
+                    continue
+                box_color = common_utils.id_to_color(cls_id)
+                indices_points_inside = filter.get_indices_of_points_inside(pointcloud, box3d, margin=0.1)
+                marker_dict = marker.create_box3d_marker(
+                    box3d, stamp, frame_id=self.frame_id,
+                    box3d_ns="gt_box3d", box3d_color=box_color, box3d_id=i)
 
                 if indices_points_inside.shape[0] < 10:
                     box_color = np.array([1.0, 0.0, 0.0])
@@ -242,9 +289,94 @@ class Visualization(Node):
 
         colors_ros = color_o3d_to_color_ros(colors_np)
         pointcloud = np.column_stack((pointcloud, colors_ros))
-        pointcloud_msg = np_to_pointcloud2(pointcloud, header, field="xyzirgb")
+
+        i1 = filter.passthrough_filter(pointcloud, self.limit_range)
+        pointcloud_in = pointcloud[i1]
+        pointcloud_out = pointcloud[~i1]
+
+        pointcloud_msg = np_to_pointcloud2(pointcloud_in, header, field="xyzirgb")
         self.vanilla_pointcloud_pub.publish(pointcloud_msg)
+
+        pointcloud_msg = np_to_pointcloud2(pointcloud_out, header, field="xyzirgb")
+        self.vanilla_pointcloud_out_pub.publish(pointcloud_msg)
+
+        # box3d marker: prediction for detection
+        box2d_img = gt_infos['box2d']
+        cls_id = gt_infos['box3d_lidar'][:, 7].reshape(-1, 1)
+        box2d_img = np.hstack((box2d_img, cls_id))
+
+        box2d_lidar = prediction_infos['proj_corners2d_list']
+        cls_id = prediction_infos['box3d_lidar'][:, 7].reshape(-1, 1)
+        box2d_lidar = np.hstack((box2d_lidar, cls_id))
+
+        mask = self.filter_detetion_by_img_decision(box2d_img, box2d_lidar, iou_threshold=0.5)
+        box3d_lidar = prediction_infos['box3d_lidar'][mask]
+        score = prediction_infos['score'][mask]
+
+        if box3d_lidar.shape[0] > 0:
+            for i in range(box3d_lidar.shape[0]):
+                box3d = box3d_lidar[i]
+                box_color = (0.0, 0.0, 0.0)
+                marker_dict = marker.create_box3d_marker(
+                    box3d, stamp, frame_id=self.frame_id,
+                    box3d_ns="pred_box3d", box3d_color=box_color, box3d_id=i, confidence=score[i])
+
+                box_marker_array.markers += list(marker_dict.values())
+
+        # box3d marker: tracker
+        if self.do_track:
+            box3d_lidar = trackers
+            if box3d_lidar.shape[0] > 0:
+                for i in range(box3d_lidar.shape[0]):
+                    box3d = box3d_lidar[i]
+                    box_color = (1.0, 0.0, 0.0)
+                    marker_dict = marker.create_box3d_marker(
+                        box3d, stamp, frame_id=self.frame_id,
+                        box3d_ns="tracker", box3d_color=box_color, box3d_id=i)
+
+                    box_marker_array.markers += list(marker_dict.values())
+
         self.box3d_pub.publish(box_marker_array)
+
+    def calculate_iou(self, box1, box2):
+        """计算两个矩形的IOU"""
+        x1, y1, w1, h1 = box1
+        x2, y2, w2, h2 = box2
+
+        # 计算交集的左上角和右下角坐标
+        xi1 = max(x1, x2)
+        yi1 = max(y1, y2)
+        xi2 = min(x1 + w1, x2 + w2)
+        yi2 = min(y1 + h1, y2 + h2)
+
+        # 计算交集面积
+        inter_area = max(xi2 - xi1, 0) * max(yi2 - yi1, 0)
+
+        # 计算并集面积
+        union_area = w1 * h1 + w2 * h2 - inter_area
+
+        # 计算IOU
+        iou = inter_area / union_area if union_area != 0 else 0
+
+        return iou
+
+    def filter_detetion_by_img_decision(self, multi_box2d_img, multi_box2d_lidar, iou_threshold=0.5):
+        """
+        对于特定类别使用图像的决策信息进行更新
+        :param multi_box2d_img:
+        :param multi_box2d_lidar:
+        :param iou_threshold:
+        :return:
+        """
+        mask = np.zeros(multi_box2d_lidar.shape[0], dtype=np.bool_)
+        for i, box2d_lidar in enumerate(multi_box2d_lidar):
+            for box2d_img in multi_box2d_img:
+                iou = self.calculate_iou(box2d_img[:4], box2d_lidar[:4])
+                cls_id = int(box2d_lidar[4])
+                if (cls_id == 1) or (cls_id != 1 and iou > iou_threshold):
+                    mask[i] = True
+                    break
+        return mask
 
     def kitti_object_to_pcdet_object(self, label_path):
         """
@@ -277,10 +409,11 @@ class Visualization(Node):
         loc = annotations['location'][:num_objects]  # x, y, z
         dims = annotations['dimensions'][:num_objects]  # l, w, h
         rots = annotations['rotation_y'][:num_objects]  # yaw
+        score = annotations['score'][:num_objects]  # yaw
         # points from camera frame->lidar frame
         loc_lidar = calibration_template.camera_to_lidar_points(loc, self.cal_info)
         class_name = annotations['name'][:num_objects]
-        boxes2d = annotations['box2d'][:num_objects]
+        box2d = annotations['box2d'][:num_objects]
         corners3d_cam = annotations['corners3d_cam'][:num_objects]
 
         corners_3d_lidar = np.array([calibration_template.camera_to_lidar_points(corners3d, self.cal_info)
@@ -302,14 +435,18 @@ class Visualization(Node):
 
         l, h, w = dims[:, 0:1], dims[:, 1:2], dims[:, 2:3]
         loc_lidar[:, 2] += h[:, 0] / 2  # btn center->geometry center
-        boxes3d_lidar = np.concatenate([loc_lidar, l, w, h, -(np.pi / 2 + rots[..., np.newaxis]), gt_class_id], axis=1)
+
+        box3d_lidar = np.concatenate([loc_lidar, l, w, h, -(np.pi / 2 + rots[..., np.newaxis]), gt_class_id], axis=1)
+        box3d_camera = np.concatenate([h, w, l, loc, rots[..., np.newaxis], gt_class_id], axis=1)
 
         infos = {
-            'boxes3d_lidar': boxes3d_lidar,
-            'boxes2d': boxes2d,
+            'box3d_lidar': box3d_lidar,
+            'box3d_camera': box3d_camera,
+            'box2d': box2d,
             'corners3d_cam': corners3d_cam,
             'proj_corners2d_list': proj_corners2d_list,
-            'proj_corners3d_list': proj_corners3d_list
+            'proj_corners3d_list': proj_corners3d_list,
+            'score': score
         }
         return infos
 
@@ -321,21 +458,22 @@ class Visualization(Node):
                 exit(0)
             if __ROS_VERSION__ == 2 and not rclpy.ok():
                 exit(0)
-
+            if frame_id < 6000:
+                continue
             file_idx = label_path.stem
 
             image_path = "{}/{}.jpg".format(self.image_dir_path, file_idx)
             lidar_path = "{}/{}.bin".format(self.pointcloud_dir_path, file_idx)
             prediction_path = "{}/{}.txt".format(self.prediction_dir_path, file_idx)
 
-            prediction_infos = None
-            if Path(self.prediction_dir_path).exists():
-                prediction_infos = self.kitti_object_to_pcdet_object(prediction_path)
             gt_infos = self.kitti_object_to_pcdet_object(label_path)
-
             if gt_infos is None:
                 print(f" No object in this frame {file_idx}, skip it.")
                 continue
+
+            prediction_infos = None
+            if Path(self.prediction_dir_path).exists():
+                prediction_infos = self.kitti_object_to_pcdet_object(prediction_path)
 
             image = cv2.imread(image_path)
             pointcloud = load_pointcloud(lidar_path)

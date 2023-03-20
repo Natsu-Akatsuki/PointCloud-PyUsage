@@ -63,7 +63,7 @@ class Visualization(Node):
             self.img_pub = self.create_publisher(Image, cfg.image_topic, latching_qos)
             self.bbx_pub = self.create_publisher(MarkerArray, cfg.bounding_box_topic, latching_qos)
 
-        self.frame = cfg.frame
+        self.frame = cfg.frame_id
         self.bridge = CvBridge()
 
         # Data

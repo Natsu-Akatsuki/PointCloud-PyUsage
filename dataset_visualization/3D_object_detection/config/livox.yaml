@@ -14,7 +14,7 @@ ROSParam:
   img_plus_box2d_topic: "/gt/img/plus_box2d"
   img_plus_box3d_topic: "/gt/img/plus_box3d"
   box3d_topic: "/box3d_marker"
-  frame: "livox_frame"
+  frame_id: "livox_frame"
 
 VisParam:
   # description: 自动还是手动触发显示数据（终端按回车键触发下一帧） True or False
