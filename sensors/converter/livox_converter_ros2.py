@@ -6,6 +6,7 @@ from std_msgs.msg import Header
 from common_utils import get_rosbag_options, create_topic
 from ampcl.ros import np_to_pointcloud2
 from rclpy.serialization import deserialize_message, serialize_message
+from builtin_interfaces.msg import Time
 
 
 class Converter():
@@ -45,9 +46,20 @@ class Converter():
                     pc_np[i, 1] = custom_msg.points[i].y
                     pc_np[i, 2] = custom_msg.points[i].z
                     pc_np[i, 3] = custom_msg.points[i].reflectivity
+
                 header = Header()
                 header.frame_id = custom_msg.header.frame_id
-                header.stamp = custom_msg.header.stamp
+                if 0:
+                    header.stamp = custom_msg.header.stamp
+                else:
+                    # 使用rosbag采集时间
+                    timebase_ns = t  # custom_msg.timebase
+                    # 将纳秒数转换为秒数和纳秒数两个部分
+                    sec = timebase_ns // 1000000000
+                    nsec = timebase_ns % 1000000000
+                    time_obj = Time(sec=sec, nanosec=nsec)
+                    header.stamp = time_obj
+
                 pc_ros = np_to_pointcloud2(pc_np, header, field="xyzi")
 
                 output = serialize_message(pc_ros)
