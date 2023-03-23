@@ -1,6 +1,6 @@
 # AmPCL
 
-提供点云处理的`Python`实现
+提供点云处理的`Python`实现，**仓库在迭代更新中，部分API的命名或有出入**
 
 ## 安装
 
@@ -33,7 +33,7 @@ $ bash install.sh
 | :-------------: | :----------------------------------------: |
 |      `io`       |             导入和导出点云文件             |
 | `visualization` |                 点云可视化                 |
-|   `ros-utils`   | 动态调参，ROS消息类型和numpy类型的相互转换 |
+|      `ros`      | 动态调参，ROS消息类型和numpy类型的相互转换 |
 |    `filter`     |            点云下采样和直通滤波            |
 
 ### IO
@@ -58,6 +58,16 @@ save_pointcloud(pointcloud, "pointcloud.pcd")
 from pointcloud_utils.io import c_load_pcd
 c_load_pcd(".ampcl/data/pointcloud_ascii.pcd")
 ```
+
+### ROS
+
+- 支持ROS1和ROS2
+
+```python
+from ampcl.ros.marker import create_bounding_box_marker
+```
+
+
 
 ### Visualization
 
@@ -91,7 +101,6 @@ $ cd dataset_visualization/3D_object_detection
 <p align="center">
 <img src="docs/kitti_visualization.gif" alt="img" width=50% height=50% />
 </p>
-
 ## 命令行
 
 ### 可视化点云
@@ -141,3 +150,5 @@ $ convert_pointcloud -t npy <点云文件名>
 | [livox_mapping](https://github.com/Livox-SDK/livox_mapping)  |          基于强度值的伪彩色          |
 | [3D-Detection-Tracking-Viewer](https://github.com/hailanyi/3D-Detection-Tracking-Viewer) |        检测结果采用车体3D模型        |
 | [EagerMOT](https://github.com/aleksandrkim61/EagerMOT/blob/open_main/inputs/bbox.py#L121) |       检测框内的点赋予颜色信息       |
+| [livox_horizon_loam](https://github.com/Livox-SDK/livox_horizon_loam/blob/master/src/livox_repub.cpp) |       Livox自定义消息类型转换        |
+|      [AB3DMOT](https://github.com/xinshuoweng/AB3DMOT)       |   基于卡尔曼滤波的三维目标跟踪模块   |
