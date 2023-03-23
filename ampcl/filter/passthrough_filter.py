@@ -1,9 +1,22 @@
 import numpy as np
 from numba import jit
+from numba.typed import List
+
+
+def passthrough_filter(pointcloud, limit_range):
+    """
+    use numba.typed.List to avoid <type 'reflected list' found for argument> warning
+    :param pointcloud:
+    :param limit_range:
+    :return:
+    """
+    # 需所有的元素的类型保持一致
+    limit_range = List(np.array(limit_range, dtype=np.float32))
+    return passthrough_filter_wrapper(pointcloud, limit_range)
 
 
 @jit(nopython=True, cache=True)
-def passthrough_filter(pointcloud: object, limit_range: object = list):
+def passthrough_filter_wrapper(pointcloud: object, limit_range: list):
     """
     :param pointcloud:
     :param limit_range: [x_min, x_max, y_min, y_max, z_min, z_max]
