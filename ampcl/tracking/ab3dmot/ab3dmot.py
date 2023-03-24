@@ -7,15 +7,6 @@ from .kalman_filter import KF
 from .matching import data_association
 
 
-def roty(t):
-    """Rotation about the y-axis."""
-    c = np.cos(t)
-    s = np.sin(t)
-    return np.array([[c,  0,  s],
-                     [0,  1,  0],
-                     [-s, 0,  c]])
-
-
 class AB3DMOT():
     def __init__(self, category, ID_init=0):
 

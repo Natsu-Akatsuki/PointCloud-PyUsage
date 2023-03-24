@@ -2,11 +2,13 @@ import numpy as np
 from .bbox_coarse_hash import BBoxCoarseFilter
 from .dist_metrics import iou
 
+
 def weird_bbox(bbox):
     if bbox.l <= 0 or bbox.w <= 0 or bbox.h <= 0:
         return True
     else:
         return False
+
 
 def nms(dets, inst_types, threshold_low=0.1, threshold_high=1.0, threshold_yaw=0.3):
     """ keep the bboxes with overlap <= threshold
@@ -17,7 +19,7 @@ def nms(dets, inst_types, threshold_low=0.1, threshold_high=1.0, threshold_yaw=0
     scores = np.asarray([det.s for det in dets])
     yaws = np.asarray([det.ry for det in dets])
     order = np.argsort(scores)[::-1]
-    
+
     result_indexes = list()
     result_types = list()
     while order.size > 0:
@@ -56,7 +58,7 @@ def nms(dets, inst_types, threshold_low=0.1, threshold_high=1.0, threshold_yaw=0
                 median_yaw = np.median(yaws[order_vote])
             yaw_vote = np.where(np.abs(yaws[order_vote] - median_yaw) % (2 * np.pi) < threshold_yaw)[0]
             order_vote = order_vote[yaw_vote]
-            
+
             # start weighted voting
             vote_score_sum = np.sum(scores[order_vote])
             det_arrays = list()
