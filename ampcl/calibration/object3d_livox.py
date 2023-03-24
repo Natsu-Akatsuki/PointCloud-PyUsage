@@ -34,7 +34,6 @@ class Object3d(object):
         self.score = float(label[15]) if label.__len__() == 16 else -1.0
         self.level_str = None
         self.level = self.get_kitti_obj_level()
-        self.corners3d_cam = self.generate_corners3d()
 
     def get_kitti_obj_level(self):
         height = float(self.box2d[3]) - float(self.box2d[1]) + 1

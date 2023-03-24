@@ -77,7 +77,8 @@ def create_box3d_marker(box3d, stamp, frame_id="lidar",
                         class_ns="class", class_name=None,
                         tracker_ns="tracker", tracker_id=None,
                         confidence_ns="confidence", confidence=None,
-                        plane_model=None):
+                        plane_model=None,
+                        box3d_wise_height_offset=0.0):
     """
     :param box3d:  [x, y, z, l, w, h, yaw] 激光雷达系
     :param stamp:
@@ -105,9 +106,9 @@ def create_box3d_marker(box3d, stamp, frame_id="lidar",
     box3d = box3d.astype(np.float32)
     if plane_model is not None:
         A, B, C, D = plane_model
-        height_offset = -(A * box3d[0] + B * box3d[1] + D) / C
+        height_offset = -(A * box3d[0] + B * box3d[1] + D) / C - box3d_wise_height_offset
     else:
-        height_offset = 0.0
+        height_offset = -box3d_wise_height_offset
     box3d_z = box3d[2] + height_offset
     set_position(box3d_marker, [box3d[0], box3d[1], box3d_z])
 
