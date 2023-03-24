@@ -25,6 +25,7 @@ def paint_box2d_on_img(img, box2d, cls_idx=None):
         else:
             box_color = (np.asarray(id_to_color(cls_idx[i])) * 255)[::-1]
             box_color = tuple([int(x) for x in box_color])
+        box = tuple([int(x) for x in box[:4]])
         cv2.rectangle(img, (box[0], box[1]), (box[2], box[3]), box_color, 2)
 
     return img
