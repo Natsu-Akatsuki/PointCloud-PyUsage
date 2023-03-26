@@ -89,8 +89,8 @@ class AB3DMOT():
         for t in range(len(self.trackers)):
             # propagate locations
             kf_tmp = self.trackers[t]
+            kf_tmp.kf.predict()
             kf_tmp.kf.x[3] = self.within_range(kf_tmp.kf.x[3])
-
             # update statistics
             kf_tmp.time_since_update += 1
             trk_tmp = kf_tmp.kf.x.reshape((-1))[:7]
