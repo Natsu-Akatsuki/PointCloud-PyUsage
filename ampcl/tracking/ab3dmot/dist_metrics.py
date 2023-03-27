@@ -131,16 +131,11 @@ def convex_area(boxa_bottom, boxb_bottom):
 #################### distance metric
 
 def iou(box_a, box_b, metric='giou_3d'):
-    ''' Compute 3D/2D bounding box IoU, only working for object parallel to ground
-
-	Input:
-		Box3D instances
-	Output:
-	    iou_3d: 3D bounding box IoU
-	    iou_2d: bird's eye view 2D bounding box IoU
+    ''' 计算三维或二维框的IoU, 当前仅适用于物体平行于地面
 
 	box corner order is like follows
-            1 -------- 0 		 top is bottom because y direction is negative
+	top is bottom because y direction is negative
+            1 -------- 0
            /|         /|
           2 -------- 3 .
           | |        | |
@@ -150,6 +145,11 @@ def iou(box_a, box_b, metric='giou_3d'):
 	
 	rect/ref camera coord:
     right x, down y, front z
+    :return:
+    :param box_a: Box3D instances
+    :param box_b: Box3D instances
+    :param metric:
+    :return: iou_3d: 3D bounding box IoU iou_2d: bird's eye view 2D bounding box IoU
 	'''
 
     # compute 2D related measures
@@ -176,7 +176,7 @@ def iou(box_a, box_b, metric='giou_3d'):
             C_3D = C_2D * union_height
             return I_3D / U_3D - (C_3D - U_3D) / C_3D
     else:
-        assert False, '%s is not supported' % space
+        assert False, '%s is not supported' % metric
 
 
 def dist_ground(bbox1, bbox2):
@@ -200,12 +200,18 @@ def dist3d_bottom(bbox1, bbox2):
 
 
 def dist3d(bbox1, bbox2):
-    # Compute distance of actual center in 3D space, considering the difference in height
+    """
+    计算两个3D框的欧式距离
+    :param bbox1:
+    :param bbox2:
+    :return:
+    """
+    # note：其实也可以直接使用(x, y, z)，只是需要对y进行高度上的补偿（底部几何中心->几何中心）
 
     corners1 = Box3D.box2corners3d_camcoord(bbox1)  # 8 x 3
     corners2 = Box3D.box2corners3d_camcoord(bbox2)  # 8 x 3
 
-    # compute center point based on 8 corners
+    # 计算质心
     c1 = np.average(corners1, axis=0)
     c2 = np.average(corners2, axis=0)
 

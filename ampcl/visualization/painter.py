@@ -78,8 +78,8 @@ def paint_box3d_on_img(img, corner_cam, use_8_corners=True, cls_idx=None):
             cv2.line(img, tuple(bbx_3d[0].astype(int)), tuple(bbx_3d[5].astype(int)), box_color, 2)
             cv2.line(img, tuple(bbx_3d[1].astype(int)), tuple(bbx_3d[4].astype(int)), box_color, 2)
         else:
-            x1, y1 = int(np.min(bbx_3d, axis=0)), int(np.min(bbx_3d, axis=1))
-            x2, y2 = int(np.max(bbx_3d, axis=0)), int(np.max(bbx_3d, axis=1))
+            x1, y1 = int(np.min(bbx_3d[:, 0])), int(np.min(bbx_3d[:, 1]))
+            x2, y2 = int(np.max(bbx_3d[:, 0])), int(np.max(bbx_3d[:, 1]))
             image_shape = img.shape
             x1 = np.clip(x1, a_min=0, a_max=image_shape[1] - 1)
             y1 = np.clip(y1, a_min=0, a_max=image_shape[0] - 1)
