@@ -19,14 +19,14 @@ def ground_segmentation_ransac(pointcloud, limit_range, distance_threshold=0.5, 
     plane_model, _ = c_ransac_plane_fitting(candidate_ground_pointcloud, distance_threshold=0.5, log=False,
                                             debug=False)
     dis = np.fabs(pointcloud[:, :3] @ plane_model[:3] + plane_model[3])
-    ground_idx = indices[dis < distance_threshold]
-    non_ground_idx = indices[dis >= distance_threshold]
+    ground_mask = dis < distance_threshold
+    non_ground_mask = dis >= distance_threshold
 
     if debug:
-        ground_point_o3d = o3d_viewer_from_pointcloud(pointcloud[ground_idx], is_show=False)
+        ground_point_o3d = o3d_viewer_from_pointcloud(pointcloud[ground_mask], is_show=False)
         ground_point_o3d.paint_uniform_color([1, 0, 0])
-        non_ground_point_o3d = o3d_viewer_from_pointcloud(pointcloud[non_ground_idx], is_show=False)
+        non_ground_point_o3d = o3d_viewer_from_pointcloud(pointcloud[non_ground_mask], is_show=False)
         non_ground_point_o3d.paint_uniform_color([0, 0, 0])
         o3d.visualization.draw_geometries([ground_point_o3d, non_ground_point_o3d])
 
-    return plane_model, ground_idx
+    return plane_model, ground_mask
