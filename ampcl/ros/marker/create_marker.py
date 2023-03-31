@@ -226,7 +226,7 @@ def create_distance_marker(frame_id="lidar", circle_num=15, distance_delta=1.0):
         set_lifetime(text_marker, seconds=0.0)
 
         # geometry information
-        theta = -45 * math.pi / 180
+        theta = -15 * math.pi / 180
         text_marker.pose.position.x = (text_id * distance_delta) * math.cos(theta)
         text_marker.pose.position.y = (text_id * distance_delta) * math.sin(theta)
         text_marker.pose.position.z = 0.0
@@ -305,13 +305,9 @@ def random_colors(N, bright=True):
 instance_colors = random_colors(100)
 
 
-def tracker_id_to_color(track_id):
-    return instance_colors[int(track_id) % 100]
+def instance_id_to_color(instance_id):
+    return instance_colors[int(instance_id) % 100]
 
-
-# gt/pred
-# tracker/detection
-# text/box3d
 
 def create_gt_detection_box3d_marker_array(pointcloud, box3d_lidar, pc_color=None,
                                            box3d_arr_marker=None, stamp=None, frame_id=None,
@@ -320,10 +316,10 @@ def create_gt_detection_box3d_marker_array(pointcloud, box3d_lidar, pc_color=Non
                                            use_color=True,
                                            ):
     """
-    :param pointcloud:
+    :param pointcloud: 真值框固定为红色
     :param box3d_lidar: [N,8] [x, y, z, l, w, h, yaw, cls_id]
                      or [N,9] [x, y, z, l, w, h, yaw, cls_id, tracker_id]
-    :param pc_color:
+    :param pc_color: 修订传进去的点云颜色字段（为引用）
     :param box3d_arr_marker:
     :param stamp:
     :param frame_id:
@@ -335,30 +331,32 @@ def create_gt_detection_box3d_marker_array(pointcloud, box3d_lidar, pc_color=Non
     :return:
     """
     if box3d_lidar.shape[0] == 0:
-        return box3d_arr_marker, None
+        return
 
     for i in range(box3d_lidar.shape[0]):
         a_box3d_lidar = box3d_lidar[i]
 
-        box3d_color = cls_id_to_color(a_box3d_lidar[7])
-        # 对高度进行的修正
+        if a_box3d_lidar[7] == -1:
+            continue
+
+        # 提取box中的激光点
+        if pc_color is not None:
+            box3d_color = cls_id_to_color(a_box3d_lidar[7])
+            inside_points_idx = get_indices_of_points_inside(pointcloud, a_box3d_lidar, margin=0.1)
+            pc_color[inside_points_idx] = box3d_color
+
+        # 对marker的高度进行的修正
         if plane_model is not None and box3d_wise_height_offset is not None:
             A, B, C, D = plane_model
             a_box3d_lidar[2] += -(A * a_box3d_lidar[0] + B * a_box3d_lidar[1] + D) / C - box3d_wise_height_offset
         elif box3d_wise_height_offset is not None:
             a_box3d_lidar[2] += -box3d_wise_height_offset
-
-        # 提取box中的激光点
-        # inside_points_idx = get_indices_of_points_inside(pointcloud, a_box3d_lidar, margin=0.1)
-        # pc_color[inside_points_idx] = box3d_color
-
+        box3d_color = (1.0, 0.0, 0.0)
         marker_dict = create_box3d_marker(a_box3d_lidar,
                                           stamp, frame_id=frame_id,
                                           box3d_id=i, box3d_ns=box3d_ns, box3d_color=box3d_color)
 
         box3d_arr_marker.markers += list(marker_dict.values())
-
-    return box3d_arr_marker, pc_color
 
 
 def create_pred_detection_box3d_marker_array(pointcloud, box3d_lidar, pc_color=None, score=None,
@@ -366,11 +364,11 @@ def create_pred_detection_box3d_marker_array(pointcloud, box3d_lidar, pc_color=N
                                              box3d_ns="pred/detection/box3d",
                                              plane_model=None, box3d_wise_height_offset=None,
                                              ):
-    """
+    """ 预测预测框的颜色与类别颜色所绑定
     :param pointcloud:
     :param box3d_lidar: [N,8] [x, y, z, l, w, h, yaw, cls_id]
                      or [N,9] [x, y, z, l, w, h, yaw, cls_id, tracker_id]
-    :param pc_color:
+    :param pc_color: 修订传进去的点云颜色字段（为引用）
     :param box3d_arr_marker:
     :param stamp:
     :param frame_id:
@@ -382,22 +380,24 @@ def create_pred_detection_box3d_marker_array(pointcloud, box3d_lidar, pc_color=N
     :return:
     """
     if box3d_lidar.shape[0] == 0:
-        return box3d_arr_marker, None
+        return
 
     for i in range(box3d_lidar.shape[0]):
         a_box3d_lidar = box3d_lidar[i]
 
         box3d_color = cls_id_to_color(a_box3d_lidar[7])
-        # 对高度进行的修正
+
+        # 提取box中的激光点
+        if pc_color is not None:
+            inside_points_idx = get_indices_of_points_inside(pointcloud, a_box3d_lidar, margin=0.1)
+            pc_color[inside_points_idx] = box3d_color
+
+        # 对marker的高度进行的修正
         if plane_model is not None and box3d_wise_height_offset is not None:
             A, B, C, D = plane_model
             a_box3d_lidar[2] += -(A * a_box3d_lidar[0] + B * a_box3d_lidar[1] + D) / C - box3d_wise_height_offset
         elif box3d_wise_height_offset is not None:
             a_box3d_lidar[2] += -box3d_wise_height_offset
-
-        # 提取box中的激光点
-        # inside_points_idx = get_indices_of_points_inside(pointcloud, a_box3d_lidar, margin=0.1)
-        # pc_color[inside_points_idx] = box3d_color
 
         marker_dict = create_box3d_marker(a_box3d_lidar,
                                           stamp, frame_id=frame_id,
@@ -407,8 +407,6 @@ def create_pred_detection_box3d_marker_array(pointcloud, box3d_lidar, pc_color=N
 
         box3d_arr_marker.markers += list(marker_dict.values())
 
-    return box3d_arr_marker, pc_color
-
 
 def create_pred_tracker_box3d_marker_array(pointcloud, box3d_lidar, pc_color=None,
                                            box3d_arr_marker=None, stamp=None, frame_id=None,
@@ -416,11 +414,11 @@ def create_pred_tracker_box3d_marker_array(pointcloud, box3d_lidar, pc_color=Non
                                            tracker_text_ns="pred/tracker/text/tracker_id",
                                            plane_model=None, box3d_wise_height_offset=None,
                                            ):
-    """
+    """ 预测跟踪框默认为红色（其他颜色需修改对应源码）
     :param pointcloud:
     :param box3d_lidar: [N,8] [x, y, z, l, w, h, yaw, cls_id]
                      or [N,9] [x, y, z, l, w, h, yaw, cls_id, tracker_id]
-    :param pc_color:
+    :param pc_color: 修订传进去的点云颜色字段（为引用）
     :param box3d_arr_marker:
     :param stamp:
     :param frame_id:
@@ -432,23 +430,26 @@ def create_pred_tracker_box3d_marker_array(pointcloud, box3d_lidar, pc_color=Non
     :return:
     """
     if box3d_lidar.shape[0] == 0:
-        return box3d_arr_marker, None
+        return
 
+    box3d_lidar = box3d_lidar.copy()
     for i in range(box3d_lidar.shape[0]):
         a_box3d_lidar = box3d_lidar[i]
 
-        box3d_color = tracker_id_to_color(a_box3d_lidar[8])
+        box3d_color = instance_id_to_color(a_box3d_lidar[8])
         tracker_text = a_box3d_lidar[8]
-        # 对高度进行的修正
+
+        # 提取box中的激光点
+        if pc_color is not None:
+            inside_points_idx = get_indices_of_points_inside(pointcloud, a_box3d_lidar, margin=0.1)
+            pc_color[inside_points_idx] = box3d_color
+
+        # 对Marker的高度进行的修正
         if plane_model is not None and box3d_wise_height_offset is not None:
             A, B, C, D = plane_model
             a_box3d_lidar[2] += -(A * a_box3d_lidar[0] + B * a_box3d_lidar[1] + D) / C - box3d_wise_height_offset
         elif box3d_wise_height_offset is not None:
             a_box3d_lidar[2] += -box3d_wise_height_offset
-
-        # 提取box中的激光点
-        inside_points_idx = get_indices_of_points_inside(pointcloud, a_box3d_lidar, margin=0.1)
-        pc_color[inside_points_idx] = box3d_color
 
         box3d_color = (1.0, 0.0, 0.0)
         marker_dict = create_box3d_marker(a_box3d_lidar,
@@ -457,5 +458,3 @@ def create_pred_tracker_box3d_marker_array(pointcloud, box3d_lidar, pc_color=Non
                                           tracker_text_ns=tracker_text_ns, tracker_text=tracker_text)
 
         box3d_arr_marker.markers += list(marker_dict.values())
-
-    return box3d_arr_marker, pc_color
