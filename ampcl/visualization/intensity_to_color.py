@@ -37,9 +37,9 @@ def intensity_to_color(intensity):
     return hex_color.view(np.float32)
 
 
-def intensity_to_color_o3d(intensity, is_normalized=True):
+def intensity_to_color_o3d(intensity, is_normalized=False):
     if is_normalized:
-        intensity = np.int32(intensity * 255)
+        intensity = np.uint8(intensity * 255)
 
     color_channel = intensity_to_color(intensity).view(np.uint32)
 
@@ -67,10 +67,20 @@ def intensity_to_color_pcd(intensity):
     return color_channel
 
 
-def color_o3d_to_color_ros(color_o3d):
-    color_o3d_int32 = np.int32(color_o3d * 255)
-    red = color_o3d_int32[:, 0]
-    green = color_o3d_int32[:, 1]
-    blue = color_o3d_int32[:, 2]
-    hex_color = np.uint32((red << 16) | (green << 8) | (blue << 0))
-    return hex_color.view(np.float32)
+def color_o3d_to_color_ros(color_o3d, is_inverse=False):
+    color_o3d_uint8 = np.uint8(color_o3d * 255)
+    return color_3u8_to_1f(color_o3d_uint8, is_inverse=is_inverse)
+
+
+def color_3f_to_1f(color3f):
+    return color_o3d_to_color_ros(color3f)
+
+
+def color_3u8_to_1f(color3u8, is_inverse=False):
+    if is_inverse:
+        color3u8 = color3u8[..., ::-1]
+    r = np.asarray(color3u8[:, 0], dtype=np.uint32)
+    g = np.asarray(color3u8[:, 1], dtype=np.uint32)
+    b = np.asarray(color3u8[:, 2], dtype=np.uint32)
+    color3u8 = np.array((r << 16) | (g << 8) | (b << 0), dtype=np.uint32)
+    return color3u8.view(np.float32)
