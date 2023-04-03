@@ -463,3 +463,11 @@ def create_pred_tracker_box3d_marker_array(pointcloud, box3d_lidar, pc_color=Non
 
         box3d_arr_marker.markers += list(marker_dict.values())
     return box3d_lidar
+
+
+def init_marker_array():
+    box3d_marker_array = MarkerArray()
+    empty_marker = Marker()
+    empty_marker.action = Marker.DELETEALL
+    box3d_marker_array.markers.append(empty_marker)
+    return box3d_marker_array
