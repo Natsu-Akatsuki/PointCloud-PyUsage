@@ -1,3 +1,4 @@
+import argparse
 import numpy as np
 import rosbag2_py
 from livox_ros_driver2.msg import CustomMsg
@@ -72,6 +73,9 @@ class Converter():
 
 
 if __name__ == "__main__":
-    input_bag_path = "rosbag/input"
-    output_bag_path = "rosbag/output"
-    converter = Converter(input_bag_path, output_bag_path)
+    parser = argparse.ArgumentParser(description='Convert rosbag from Livox LiDAR to RSlidar')
+    parser.add_argument('--input', type=str, default='rosbag/input', help='input rosbag path')
+    parser.add_argument('--output', type=str, default='rosbag/output', help='output rosbag path')
+    args = parser.parse_args()
+
+    converter = Converter(args.input, args.output)
