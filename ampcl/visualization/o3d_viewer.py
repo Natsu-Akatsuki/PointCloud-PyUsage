@@ -1,13 +1,16 @@
 import argparse
 
+import numpy as np
 import open3d as o3d
 from colorama import Fore
+
 from ..io import load_pointcloud
 from .intensity_to_color import intensity_to_color_o3d
-import numpy as np
 
 
-def o3d_viewer_from_pointcloud(pointcloud, is_normalized=False, colors=None, is_show=True):
+def o3d_viewer_from_pointcloud(pointcloud, is_normalized=False, colors=None,
+                               show_pc=True,
+                               show_axis=False, axis_size=2.0):
     pointcloud_o3d = o3d.geometry.PointCloud()
     pointcloud_o3d.points = o3d.utility.Vector3dVector(pointcloud[:, 0:3])
 
@@ -18,8 +21,11 @@ def o3d_viewer_from_pointcloud(pointcloud, is_normalized=False, colors=None, is_
             colors = intensity_to_color_o3d(intensity, is_normalized=is_normalized)
         pointcloud_o3d.colors = o3d.utility.Vector3dVector(colors)
 
-    if is_show:
-        o3d.visualization.draw_geometries([pointcloud_o3d])
+    if show_pc:
+        o3d_list = [pointcloud_o3d]
+        if show_axis is True:
+            o3d_list.append(o3d.geometry.TriangleMesh.create_coordinate_frame(size=axis_size, origin=[0, 0, 0]))
+        o3d.visualization.draw_geometries(o3d_list)
     else:
         return pointcloud_o3d
 
