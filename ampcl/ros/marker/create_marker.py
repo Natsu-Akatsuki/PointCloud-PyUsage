@@ -331,8 +331,9 @@ def create_gt_detection_box3d_marker_array(pointcloud, box3d_lidar, pc_color=Non
     :return:
     """
     if box3d_lidar.shape[0] == 0:
-        return
+        return box3d_lidar
 
+    box3d_lidar = box3d_lidar.copy()
     for i in range(box3d_lidar.shape[0]):
         a_box3d_lidar = box3d_lidar[i]
 
@@ -357,6 +358,7 @@ def create_gt_detection_box3d_marker_array(pointcloud, box3d_lidar, pc_color=Non
                                           box3d_id=i, box3d_ns=box3d_ns, box3d_color=box3d_color)
 
         box3d_arr_marker.markers += list(marker_dict.values())
+    return box3d_lidar
 
 
 def create_pred_detection_box3d_marker_array(pointcloud, box3d_lidar, pc_color=None, score=None,
@@ -380,8 +382,9 @@ def create_pred_detection_box3d_marker_array(pointcloud, box3d_lidar, pc_color=N
     :return:
     """
     if box3d_lidar.shape[0] == 0:
-        return
+        return box3d_lidar
 
+    box3d_lidar = box3d_lidar.copy()
     for i in range(box3d_lidar.shape[0]):
         a_box3d_lidar = box3d_lidar[i]
 
@@ -406,6 +409,7 @@ def create_pred_detection_box3d_marker_array(pointcloud, box3d_lidar, pc_color=N
                                           confidence_text=score[i])
 
         box3d_arr_marker.markers += list(marker_dict.values())
+    return box3d_lidar
 
 
 def create_pred_tracker_box3d_marker_array(pointcloud, box3d_lidar, pc_color=None,
@@ -430,7 +434,7 @@ def create_pred_tracker_box3d_marker_array(pointcloud, box3d_lidar, pc_color=Non
     :return:
     """
     if box3d_lidar.shape[0] == 0:
-        return
+        return box3d_lidar
 
     box3d_lidar = box3d_lidar.copy()
     for i in range(box3d_lidar.shape[0]):
@@ -458,3 +462,4 @@ def create_pred_tracker_box3d_marker_array(pointcloud, box3d_lidar, pc_color=Non
                                           tracker_text_ns=tracker_text_ns, tracker_text=tracker_text)
 
         box3d_arr_marker.markers += list(marker_dict.values())
+    return box3d_lidar
