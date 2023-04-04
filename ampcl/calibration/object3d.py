@@ -56,7 +56,7 @@ def box3d_lidar_to_kitti(box3d_lidar, cal_info):
 
 def box3d_lidar_to_cam(box3d_lidar, cal_info):
     """
-    :param box3d_lidar: (N, 7) [x, y, z, l, h, w, rz]
+    :param box3d_lidar: (N, 7) [x, y, z, l, w, h, rz]
     :return:
         boxes3d_camera: (N, 7) [x, y, z, l, h, w, ry] in camera frame
     """
@@ -69,7 +69,15 @@ def box3d_lidar_to_cam(box3d_lidar, cal_info):
     xyz_cam = calibration.lidar_to_camera_points(xyz_lidar, cal_info=cal_info)
 
     r = -r - np.pi / 2
-    return np.concatenate([xyz_cam, l, h, w, r], axis=-1)
+
+    if box3d_lidar.shape[1] > 7:
+        extra_info_length = box3d_lidar.shape[1] - 7
+        extra_info = box3d_lidar[:, 7:].reshape(-1, extra_info_length)
+    else:
+        extra_info = np.zeros(0, 7)
+
+    box3d_cam = np.concatenate([xyz_cam, l, h, w, r, extra_info], axis=-1)
+    return box3d_cam
 
 
 def box3d_cam_to_2d4c(box3d_cam, cal_info, img_shape):
