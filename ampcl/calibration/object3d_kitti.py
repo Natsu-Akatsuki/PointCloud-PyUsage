@@ -14,7 +14,7 @@ def get_objects_from_label(label_file, cal_info):
 
 
 def cls_type_to_id(cls_type):
-    type_to_id = {'Car': 1, 'Pedestrian': 2, 'Cyclist': 3, 'Van': 4}
+    type_to_id = {'Car': 1, 'Pedestrian': 2, 'Cyclist': 3, 'Van': 4, 'DontCare': -2}
     if cls_type not in type_to_id.keys():
         return -1
     return type_to_id[cls_type]
@@ -109,7 +109,8 @@ def kitti_object_to_pcdet_object(label_path, cal_info):
                    'box2d': np.array([obj.box2d for obj in obj_list], np.float32),
                    'corner3d_cam': np.array([obj.corner3d_cam for obj in obj_list], np.float32),
                    'corner3d_lidar': np.array([obj.corner3d_lidar for obj in obj_list], np.float32),
-                   'corner3d_lidar_pixel': np.array([obj.corner3d_lidar_pixel for obj in obj_list], np.float32)
+                   'corner3d_lidar_pixel': np.array([obj.corner3d_lidar_pixel for obj in obj_list], np.float32),
+                   'cls_id': np.array([obj.cls_id for obj in obj_list], np.int32)
                    }
 
     # 获取非DT的标签个数
@@ -125,24 +126,24 @@ def kitti_object_to_pcdet_object(label_path, cal_info):
     rots = annotations['rotation_y'][:num_objects]
     score = annotations['score'][:num_objects]
 
+    # 对于box2d保留dontcare部分
+    box2d = annotations['box2d']
+    cls_id = annotations['cls_id']
+    box2d = np.hstack((box2d, cls_id.reshape(-1, 1)))
+
     # points from camera frame->lidar frame
     loc_lidar = calibration.camera_to_lidar_points(loc_cam, cal_info)
     class_name = annotations['name'][:num_objects]
-    box2d = annotations['box2d'][:num_objects]
     corner3d_cam = annotations['corner3d_cam'][:num_objects]
     corner3d_lidar = annotations['corner3d_lidar'][:num_objects]
     corner3d_lidar_pixel = annotations['corner3d_lidar_pixel'][:num_objects]
 
-    class_id = []
-    for i in range(class_name.shape[0]):
-        class_id.append(int(cls_type_to_id(class_name[i])))
-    class_id = np.asarray(class_id, dtype=np.int32).reshape(-1, 1)
-
+    cls_id = cls_id[:num_objects]
     l, h, w = dims[:, 0:1], dims[:, 1:2], dims[:, 2:3]
     loc_lidar[:, 2] += h[:, 0] / 2  # bottom center -> geometry center
 
-    box3d_lidar = np.concatenate([loc_lidar, l, w, h, -(np.pi / 2 + rots[..., np.newaxis]), class_id], axis=1)
-    box3d_camera = np.concatenate([h, w, l, loc_cam, rots[..., np.newaxis], class_id], axis=1)
+    box3d_lidar = np.concatenate([loc_lidar, l, w, h, -(np.pi / 2 + rots[..., np.newaxis]), cls_id[..., np.newaxis]], axis=1)
+    box3d_camera = np.concatenate([h, w, l, loc_cam, rots[..., np.newaxis], cls_id[..., np.newaxis]], axis=1)
 
     infos = {
         'box2d': box2d,
@@ -156,6 +157,17 @@ def kitti_object_to_pcdet_object(label_path, cal_info):
     return infos
 
 
+def get_template_prediction(num_samples):
+    ret_dict = {
+        'name': np.zeros(num_samples), 'truncated': np.zeros(num_samples),
+        'occluded': np.zeros(num_samples), 'alpha': np.zeros(num_samples),
+        'bbox': np.zeros([num_samples, 4]), 'dimensions': np.zeros([num_samples, 3]),
+        'location': np.zeros([num_samples, 3]), 'rotation_y': np.zeros(num_samples),
+        'score': np.zeros(num_samples), 'boxes_lidar': np.zeros([num_samples, 7])
+    }
+    return ret_dict
+
+
 def save_kitti_prediction(pred_dict, cal_info, img_shape, output_path=None):
     """导出KITTI格式的预测结果
     :param cal_info:
@@ -163,23 +175,26 @@ def save_kitti_prediction(pred_dict, cal_info, img_shape, output_path=None):
     :param output_path:
     :return:
     """
-    pred_boxes = pred_dict['pred_boxes']
-    pred_scores = pred_dict['pred_scores']
+    if pred_dict is None:
+        pred_dict = get_template_prediction(0)
+    else:
+        pred_boxes = pred_dict['pred_boxes']
+        pred_scores = pred_dict['pred_scores']
 
-    box3d_cam = object3d.box3d_lidar_to_cam(pred_boxes, cal_info)
-    box2d4c = object3d.box3d_cam_to_2d4c(
-        box3d_cam, cal_info, img_shape=img_shape
-    )
+        box3d_cam = object3d.box3d_lidar_to_cam(pred_boxes, cal_info)
+        box2d4c, _ = object3d.box3d_cam_to_2d(
+            box3d_cam, cal_info, img_shape=img_shape
+        )
 
-    class_names = np.array(['Car', 'Pedestrian', 'Cyclist'])
-    pred_dict['name'] = np.array(class_names)[np.int32(pred_boxes[:, 7] - 1)]
-    pred_dict['alpha'] = -np.arctan2(-pred_boxes[:, 1], pred_boxes[:, 0]) + box3d_cam[:, 6]
-    pred_dict['bbox'] = box2d4c
-    pred_dict['dimensions'] = box3d_cam[:, 3:6]
-    pred_dict['location'] = box3d_cam[:, 0:3]
-    pred_dict['rotation_y'] = box3d_cam[:, 6]
-    pred_dict['score'] = pred_scores
-    pred_dict['boxes_lidar'] = pred_boxes
+        class_names = np.array(['Car', 'Pedestrian', 'Cyclist'])
+        pred_dict['name'] = np.array(class_names)[np.int32(pred_boxes[:, 7] - 1)]
+        pred_dict['alpha'] = -np.arctan2(-pred_boxes[:, 1], pred_boxes[:, 0]) + box3d_cam[:, 6]
+        pred_dict['bbox'] = box2d4c
+        pred_dict['dimensions'] = box3d_cam[:, 3:6]
+        pred_dict['location'] = box3d_cam[:, 0:3]
+        pred_dict['rotation_y'] = box3d_cam[:, 6]
+        pred_dict['score'] = pred_scores
+        pred_dict['boxes_lidar'] = pred_boxes
 
     if output_path is not None:
         cur_det_file = output_path

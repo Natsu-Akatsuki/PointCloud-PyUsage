@@ -26,9 +26,10 @@ def generate_project_img(value, pixel_coord, undistor_img,
 def paint_pointcloud(pc_np, img, cal_info, debug=False, publisher=None, header=None):
     distor = cal_info["distor"]
     intri_mat = cal_info["intri_mat"]
-    extri_mat = cal_info["extri_mat"]
+
     undistor_img = cv2.undistort(src=img, cameraMatrix=intri_mat, distCoeffs=distor)
     img_shape = undistor_img.shape
+    # 保留在图像内的点云和相机前的点云
     pixel_coord, _, mask = lidar_to_pixel(pc_np, cal_info, img_shape, use_mask=True)
 
     pc_filtered = pc_np[mask]
@@ -41,7 +42,7 @@ def paint_pointcloud(pc_np, img, cal_info, debug=False, publisher=None, header=N
         o3d_viewer_from_pointcloud(pc_filtered, colors=color3f, width=800, height=500)
 
     if publisher is not None:
-        color1f = visualization.color3u8_to_color1f(color3u8)
+        color1f = visualization.color_3u8_to_1f(color3u8).reshape(-1, 1)
         pc_np_with_color = np.hstack([pc_filtered, color1f])
         pc2_msg = np_to_pointcloud2(pc_np_with_color, header, field="xyzirgb")
         publisher.publish(pc2_msg)

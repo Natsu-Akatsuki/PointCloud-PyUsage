@@ -80,7 +80,7 @@ def box3d_lidar_to_cam(box3d_lidar, cal_info):
     return box3d_cam
 
 
-def box3d_cam_to_2d4c(box3d_cam, cal_info, img_shape):
+def box3d_cam_to_2d(box3d_cam, cal_info, img_shape):
     """
     :param boxes3d: (N, 7) [x, y, z, l, h, w, r] in camera coords
     :param calib:
@@ -90,10 +90,10 @@ def box3d_cam_to_2d4c(box3d_cam, cal_info, img_shape):
 
     corners3d = box3d_cam_to_3d8c(box3d_cam.astype(np.float32))
     pts_img, _, _ = calibration.cam_to_pixel(corners3d.reshape(-1, 3), cal_info, img_shape=None)
-    corners_in_image = pts_img.reshape(-1, 8, 2)
+    box2d8c = pts_img.reshape(-1, 8, 2)
 
-    min_uv = np.min(corners_in_image, axis=1)  # (N, 2)
-    max_uv = np.max(corners_in_image, axis=1)  # (N, 2)
+    min_uv = np.min(box2d8c, axis=1)  # (N, 2)
+    max_uv = np.max(box2d8c, axis=1)  # (N, 2)
     box2d4c = np.concatenate([min_uv, max_uv], axis=1)
     if img_shape is not None:
         box2d4c[:, 0] = np.clip(box2d4c[:, 0], a_min=0, a_max=img_shape[1] - 1)
@@ -101,7 +101,7 @@ def box3d_cam_to_2d4c(box3d_cam, cal_info, img_shape):
         box2d4c[:, 2] = np.clip(box2d4c[:, 2], a_min=0, a_max=img_shape[1] - 1)
         box2d4c[:, 3] = np.clip(box2d4c[:, 3], a_min=0, a_max=img_shape[0] - 1)
 
-    return box2d4c
+    return box2d4c, box2d8c
 
 
 def box3d_cam_to_3d8c(boxes3d, bottom_center=True):
@@ -150,10 +150,10 @@ def box3d_cam_to_3d8c(boxes3d, bottom_center=True):
     return corners.astype(np.float32)
 
 
-def box3d_lidar_to_2d4c(box3d_lidar, cal_info, img_shape):
+def box3d_lidar_to_2d(box3d_lidar, cal_info, img_shape):
     box3d_cam = box3d_lidar_to_cam(box3d_lidar, cal_info)
-    box2d4c = box3d_cam_to_2d4c(box3d_cam, cal_info, img_shape=img_shape)
-    return box2d4c
+    box2d4c, box2d8c = box3d_cam_to_2d(box3d_cam, cal_info, img_shape=img_shape)
+    return box2d4c, box2d8c
 
 
 def corner_3d8c_to_2d4c_2d8c(corners3d, cal_info, frame="lidar", img_shape=None):

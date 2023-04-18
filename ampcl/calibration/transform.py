@@ -1,6 +1,25 @@
 import numpy as np
 from scipy.spatial.transform import Rotation
 
+# isort: off
+try:
+    import rospy
+
+    __ROS_VERSION__ = 1
+
+except:
+    try:
+        import rclpy
+
+        __ROS_VERSION__ = 2
+    except:
+        raise ImportError("Please install ROS2 or ROS1")
+
+from tf2_ros import TransformException
+
+
+# isort: on
+
 
 def solve_frame_tf():
     """
@@ -71,6 +90,41 @@ def euler_from_transformation(tf_mat):
 
     rotation = Rotation.from_matrix(tf_mat[:3, :3])
     rotation.as_euler('ZYX', degrees=True)
+
+
+def transform_box3d_frame_by_ros(self, box3d_src, target_frame, src_frame):
+    """
+    将src_frame的box3d转换到target_frame
+    """
+    box3d_target = box3d_src.copy()
+    xyz = box3d_target[:, :3]
+    xyz = np.hstack((xyz, np.ones((xyz.shape[0], 1))))
+
+    try:
+        t = self.tf_buffer.lookup_transform(
+            target_frame,
+            src_frame,
+            rclpy.time.Time())  # 只要最新的数据
+        # 获得的是基坐标变换
+        x = t.transform.translation.x
+        y = t.transform.translation.y
+        z = t.transform.translation.z
+        rx = t.transform.rotation.x
+        ry = t.transform.rotation.y
+        rz = t.transform.rotation.z
+        rw = t.transform.rotation.w
+        r = Rotation.from_quat([rx, ry, rz, rw])
+        r = r.as_euler(seq="ZYX", degrees=False)  # 其TF变换是xyz->ypr
+        extri_mat = ros_xyzypr_to_tf_mat([x, y, z, r[0], r[1], r[2]], degrees=False, is_basis_change=True)
+
+    except TransformException as ex:
+        self.get_logger().info(
+            f'Could not transform {src_frame} to {target_frame}: {ex}')
+        return
+
+    xyz = np.dot(xyz, extri_mat.T)[:, :3]
+    box3d_target[:, :3] = xyz[:, :3]
+    return box3d_src
 
 
 if __name__ == '__main__':
