@@ -5,10 +5,10 @@ import cv2
 def id_to_color(cls_id):
     color_maps = {-1: [0.5, 0.5, 0.5],
                   0: [1.0, 0.0, 0.0],
-                  1: [0.0, 1.0, 0.0],  # Vehicle
-                  2: [0.0, 0.0, 1.0],  # Pedestrian
-                  3: [1.0, 0.8, 0.0],  # Cyclist
-                  4: [1.0, 0.0, 1.0]
+                  1: [0.0, 1.0, 0.0],  # 绿：Vehicle
+                  2: [0.0, 0.0, 1.0],  # 蓝：Pedestrian
+                  3: [1.0, 0.8, 0.0],  # 土黄：Cyclist
+                  4: [1.0, 0.0, 1.0]  # 洋紫：Van
                   }
     if cls_id not in color_maps.keys():
         return [0.5, 1.0, 0.5]
@@ -20,8 +20,18 @@ def paint_box2d_on_img(img, box2d, cls_idx=None):
     img = img.copy()
     for i in range(box2d.shape[0]):
         box = box2d[i]
+        # 无类别时直接都使用红色
         if cls_idx is None:
             box_color = (0, 0, 255)
+        if cls_idx[i] == -2:  # Don't care
+            x1, y1 = int(box[0]), int(box[1])
+            x2, y2 = int(box[2]), int(box[3])
+            sub_img = img[y1:y2, x1:x2]
+            mask = np.full((sub_img.shape[0], 3), np.array([170, 255, 127]), dtype=np.uint8)
+            # mask = np.ones(sub_img.shape, dtype=np.uint8) * 0
+            ret = cv2.addWeighted(sub_img, 0.6, mask, 0.4, 1.0)
+            img[y1:y2, x1:x2] = ret
+            continue
         else:
             box_color = (np.asarray(id_to_color(cls_idx[i])) * 255)[::-1]
             box_color = tuple([int(x) for x in box_color])
