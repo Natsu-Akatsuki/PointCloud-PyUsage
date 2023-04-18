@@ -1,0 +1,19 @@
+DatasetParam:
+  dataset_dir: "/home/helios/mnt/dataset/Kitti/object/"
+  img_dir: "training/image_2"
+  pc_dir: "training/velodyne"
+  gt_label_dir: "training/label_2"
+  cal_dir: "training/calib"
+
+AlgorithmParam:
+  # x_min, x_max, y_min, y_max, z_min, z_max
+  limit_range: [0.0, 70.4, -40.0, 40.0, -3.0, 1.0]
+  # description: 自动还是手动触发显示数据（终端按回车键触发下一帧） True or False
+  auto_update: False
+  # description: 单位（秒）
+  update_time: 0.5
+  # description: 是否只显示相机视野内的点云
+  apply_fov_filter: True
+ROSParam:
+  frame_id: "velodyne"
+

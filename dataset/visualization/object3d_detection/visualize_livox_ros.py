@@ -25,12 +25,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 import std_msgs.msg
-from ampcl import filter
-from ampcl.calibration import calibration_template
+from ampcl.calibration import calibration
 from ampcl.calibration import object3d
 from ampcl.calibration.calibration_livox import LivoxCalibration
 from ampcl.calibration.object3d_kitti import get_objects_from_label
-from ampcl.detection import SimpleYolo
 from ampcl.io import load_pointcloud
 from ampcl.perception.ground_segmentation import ground_segmentation_ransac
 from ampcl.ros import marker, np_to_pointcloud2, publisher
@@ -42,6 +40,7 @@ from tqdm import tqdm
 from visualization_msgs.msg import Marker, MarkerArray
 
 import common_utils
+from ampcl.detection import SimpleYolo
 
 
 # isort: on
@@ -61,8 +60,11 @@ class Visualization(Node):
         self.calib_dir_path = dataset_dir / cfg.calib_dir_path
         self.frame_id = cfg.frame_id
         self.limit_range = [0.0, 99.6, -44.8, 44.8, -2.0, 2.0]
-        self.do_track = True
-        self.yolo_model = SimpleYolo()
+        self.do_track = False
+        self.do_fusion = False
+
+        if self.do_fusion:
+            self.yolo_model = SimpleYolo()
 
         # ROS
         if __ROS_VERSION__ == 1:
@@ -114,8 +116,8 @@ class Visualization(Node):
         :param img:
         """
         if self.color_pointcloud_pub.get_subscription_count() > 0:
-            color_pointcloud_in_image, mask = calibration_template.paint_pointcloud(pointcloud, img,
-                                                                                    self.cal_info)
+            color_pointcloud_in_image, mask = calibration.paint_pointcloud(pointcloud, img,
+                                                                           self.cal_info)
             # 将不能投影到图像上的点云的颜色设置为黑色
             pointcloud_not_in_image = pointcloud[~mask]
             rgb_arr = np.zeros((pointcloud_not_in_image.shape[0]), dtype=np.float32)
@@ -154,38 +156,25 @@ class Visualization(Node):
         # img_plus_box2d = paint_box2d_on_img(img.copy(), gt_box2d_img, cls_idx=gt_box3d_lidar[:, 7])
 
         # 二维目标检测
-        box2d_infer = self.yolo_model.infer(img, keep_idx=[0, 1, 2, 3, 5, 7])
-        id_remap = {
-            0: 2,  # person -> Pedestrian
-            1: 3,  # bicycle -> Cyclist
-            2: 1,  # car->Car
-            3: 3,  # motorcycle->Cyclist
-            5: 1,  # bus -> Car
-            7: 1  # truck -> Car
-        }
-        for i in range(box2d_infer.shape[0]):
-            box2d_infer[i, 5] = id_remap[box2d_infer[i, 5]]
-        img_plus_box2d = paint_box2d_on_img(img.copy(), box2d_infer, cls_idx=box2d_infer[:, 5])
+        if 0:
+            box2d_infer = self.yolo_model.infer(img, keep_idx=[0, 1, 2, 3, 5, 7])
+            id_remap = {
+                0: 2,  # person -> Pedestrian
+                1: 3,  # bicycle -> Cyclist
+                2: 1,  # car->Car
+                3: 3,  # motorcycle->Cyclist
+                5: 1,  # bus -> Car
+                7: 1  # truck -> Car
+            }
+            for i in range(box2d_infer.shape[0]):
+                box2d_infer[i, 5] = id_remap[box2d_infer[i, 5]]
+            img_plus_box2d = paint_box2d_on_img(img.copy(), box2d_infer, cls_idx=box2d_infer[:, 5])
+        else:
+            img_plus_box2d = paint_box2d_on_img(img.copy(), gt_box2d_img, cls_idx=gt_box3d_lidar[:, 7])
         publisher.publish_img(img_plus_box2d, self.img_plus_box2d_pub, self.bridge, stamp, self.frame_id)
-
-        # 图像+投影三维框
-        pred_box3d = pred_infos['box3d_lidar']
-        proj_corners3d_list = pred_infos['proj_corners3d_list']
-        img_plus_box3d = paint_box3d_on_img(img.copy(), proj_corners3d_list, cls_idx=pred_box3d[:, 7],
-                                            use_8_corners=False)
-        publisher.publish_img(img_plus_box3d, self.img_plus_box3d_pub, self.bridge, stamp, self.frame_id)
 
         # 彩色点云
         self.pub_color_pointcloud_ros(header, pointcloud, img)
-
-        # 跟踪真值数据
-        if self.do_track:
-            if 1:
-                detections = gt_infos['box3d_camera']
-            else:
-                detections = pred_infos['box3d_camera']
-            trackers = self.track(detections)
-            trackers = object3d.box3d_from_kitti_to_lidar(trackers, self.cal_info)
 
         # 背景点，e.g. 地面点
         colors_np = np.full((pointcloud.shape[0], 3), np.array([0.8, 0.8, 0.8]))
@@ -193,42 +182,23 @@ class Visualization(Node):
         _, ground_idx = ground_segmentation_ransac(pointcloud, limit_range, distance_threshold=0.5, debug=False)
         colors_np[ground_idx] = [0.61, 0.46, 0.33]
 
-        # box3d marker: gt for detection
-        box_marker_array = MarkerArray()
+        # 创建marker
+        box3d_marker_array = MarkerArray()
         empty_marker = Marker()
         empty_marker.action = Marker.DELETEALL
-        box_marker_array.markers.append(empty_marker)
+        box3d_marker_array.markers.append(empty_marker)
 
-        box3d_lidar = gt_box3d_lidar
-        if box3d_lidar.shape[0] > 0:
-            for i in range(box3d_lidar.shape[0]):
-                box3d = box3d_lidar[i]
-                cls_id = int(box3d[7])
-                if cls_id == -1:
-                    continue
-                box_color = common_utils.id_to_color(cls_id)
-                indices_points_inside = filter.get_indices_of_points_inside(pointcloud, box3d, margin=0.1)
-                marker_dict = marker.create_box3d_marker(
-                    box3d, stamp, frame_id=self.frame_id,
-                    box3d_ns="gt_box3d", box3d_color=box_color, box3d_id=i)
-
-                if indices_points_inside.shape[0] < 50:
-                    box_color = np.array([1.0, 0.0, 0.0])
-                colors_np[indices_points_inside] = box_color
-
-                for marker_element in marker_dict.values():
-                    box_marker_array.markers.append(marker_element)
-
-        colors_ros = color_o3d_to_color_ros(colors_np)
-        pointcloud = np.column_stack((pointcloud, colors_ros))
-
-        publisher.publish_pc_by_range(self.pc_in_pub,
-                                      self.pc_out_pub,
-                                      pointcloud,
-                                      header,
-                                      self.limit_range,
-                                      field="xyzirgb")
-
+        marker.create_gt_detection_box3d_marker_array(pointcloud, gt_box3d_lidar.copy(),
+                                                      pc_color=colors_np,
+                                                      stamp=stamp,
+                                                      frame_id=self.frame_id,
+                                                      box3d_marker_array=box3d_marker_array,
+                                                      box3d_ns="gt/detection/box3d"
+                                                      )
+        if pred_infos is not None:
+            pred_box3d_lidar = pred_infos['box3d_lidar']
+            score = pred_infos['score']
+            mask = None
         if 0:
             # box3d marker: prediction for detection
             box2d_img = gt_infos['box2d']
@@ -239,59 +209,88 @@ class Visualization(Node):
             cls_id = pred_infos['box3d_lidar'][:, 7].reshape(-1, 1)
             box2d_lidar = np.hstack((box2d_lidar, cls_id))
 
-            mask = self.filter_detetion_by_img_decision(box2d_img, box2d_lidar, iou_threshold=0.5)
-            box3d_lidar = pred_infos['box3d_lidar'][mask]
+            mask = self.filter_detetion_by_img_decision(box2d_img, box2d_lidar, iou_threshold=0.4)
+            pred_box3d_lidar = pred_infos['box3d_lidar'][mask]
             score = pred_infos['score'][mask]
+
+        # 图像+投影三维框
+        if 0:
+            # 看预测值
+            pred_box3d = pred_infos['box3d_lidar']
+            proj_corners3d_list = pred_infos['proj_corners3d_list']
         else:
-            box3d_lidar = pred_infos['box3d_lidar']
-            score = pred_infos['score']
+            # 看真值
+            pred_box3d = gt_infos['box3d_lidar']
+            proj_corners3d_list = gt_infos['proj_corners3d_list']
+        pred_box3d_lidar = pred_box3d
+        img_plus_box3d = paint_box3d_on_img(img.copy(), proj_corners3d_list, cls_idx=pred_box3d[:, 7],
+                                            use_8_corners=False)
+        publisher.publish_img(img_plus_box3d, self.img_plus_box3d_pub, self.bridge, stamp, self.frame_id)
+        # marker.create_pred_detection_box3d_marker_array(pointcloud, pred_box3d_lidar.copy(),
+        #                                                 score=None,
+        #                                                 pc_color=None,
+        #                                                 stamp=stamp,
+        #                                                 frame_id=self.frame_id,
+        #                                                 box3d_arr_marker=box3d_marker_array,
+        #                                                 box3d_ns="pred/detection/box3d"
+        #                                                 )
 
-        if box3d_lidar.shape[0] > 0:
-            for i in range(box3d_lidar.shape[0]):
-                box3d = box3d_lidar[i]
-                box_color = (0.0, 0.0, 0.0)
-                marker_dict = marker.create_box3d_marker(
-                    box3d, stamp, frame_id=self.frame_id,
-                    box3d_ns="pred_box3d", box3d_color=box_color, box3d_id=i, confidence=score[i])
-
-                box_marker_array.markers += list(marker_dict.values())
-
-        # box3d marker: tracker
+        # 跟踪真值数据
         if self.do_track:
-            box3d_lidar = trackers
-            if box3d_lidar.shape[0] > 0:
-                for i in range(box3d_lidar.shape[0]):
-                    box3d = box3d_lidar[i]
-                    box_color = (1.0, 0.0, 0.0)
-                    marker_dict = marker.create_box3d_marker(
-                        box3d, stamp, frame_id=self.frame_id,
-                        box3d_id=i, box3d_ns="tracker", box3d_color=box_color,
-                        tracker_ns="tracker_id", tracker_id=int(box3d[8]),
-                    )
+            if 0:
+                detections = gt_infos['box3d_camera']
+            else:
+                detections = pred_infos['box3d_camera']
+            trackers = self.track(detections)
+            trackers = object3d.box3d_from_kitti_to_lidar(trackers, self.cal_info)
+            marker.create_pred_tracker_box3d_marker_array(pointcloud, trackers.copy(),
+                                                          pc_color=None,
+                                                          stamp=stamp,
+                                                          frame_id=self.frame_id,
+                                                          box3d_arr_marker=box3d_marker_array,
+                                                          box3d_ns="pred/tracker/box3d",
+                                                          tracker_text_ns="pred/tracker/text/tracker_id"
+                                                          )
+        colors_ros = color_o3d_to_color_ros(colors_np)
+        pointcloud = np.column_stack((pointcloud, colors_ros))
 
-                    box_marker_array.markers += list(marker_dict.values())
+        publisher.publish_pc_by_range(self.pc_in_pub,
+                                      self.pc_out_pub,
+                                      pointcloud,
+                                      header,
+                                      self.limit_range,
+                                      field="xyzirgb")
+        self.box3d_pub.publish(box3d_marker_array)
+        # return mask
 
-        self.box3d_pub.publish(box_marker_array)
+    def update_pred_infos(self, label_path, mask):
+        with open(label_path, 'r') as f:
+            lines = f.readlines()
+        idx_list = np.arange(mask.shape[0])[mask]
+        # 仅保留指定行数
+        selected_lines = [lines[i] for i in idx_list]
 
-    def calculate_iou(self, box1, box2):
-        """计算两个矩形的IOU"""
-        x1, y1, w1, h1 = box1
-        x2, y2, w2, h2 = box2
+        # 写入新文件
+        output_dir = Path("/home/helios/mnt/dataset/livox_dataset/training/update")
+        output_file = output_dir / Path(label_path).name
+        with open(output_file, 'w') as f:
+            f.writelines(selected_lines)
 
-        # 计算交集的左上角和右下角坐标
-        xi1 = max(x1, x2)
-        yi1 = max(y1, y2)
-        xi2 = min(x1 + w1, x2 + w2)
-        yi2 = min(y1 + h1, y2 + h2)
+    def calculate_iou(self, boxA, boxB):
+        # 计算两个框的交集面积
+        xA = max(boxA[0], boxB[0])
+        yA = max(boxA[1], boxB[1])
+        xB = min(boxA[2], boxB[2])
+        yB = min(boxA[3], boxB[3])
+        intersection_area = max(0, xB - xA + 1) * max(0, yB - yA + 1)
 
-        # 计算交集面积
-        inter_area = max(xi2 - xi1, 0) * max(yi2 - yi1, 0)
+        # 计算两个框的并集面积
+        boxA_area = (boxA[2] - boxA[0] + 1) * (boxA[3] - boxA[1] + 1)
+        boxB_area = (boxB[2] - boxB[0] + 1) * (boxB[3] - boxB[1] + 1)
+        union_area = boxA_area + boxB_area - intersection_area
 
-        # 计算并集面积
-        union_area = w1 * h1 + w2 * h2 - inter_area
-
-        # 计算IOU
-        iou = inter_area / union_area if union_area != 0 else 0
+        # 计算交占比
+        iou = intersection_area / union_area
 
         return iou
 
@@ -306,11 +305,11 @@ class Visualization(Node):
         mask = np.zeros(multi_box2d_lidar.shape[0], dtype=np.bool_)
         for i, box2d_lidar in enumerate(multi_box2d_lidar):
             for box2d_img in multi_box2d_img:
-                iou = self.calculate_iou(box2d_img[:4], box2d_lidar[:4])
-                cls_id = int(box2d_lidar[4])
-                if (cls_id == 1) or (cls_id != 1 and iou > iou_threshold):
-                    mask[i] = True
-                    break
+                if int(box2d_lidar[4]) == int(box2d_img[4]):
+                    iou = self.calculate_iou(box2d_img[:4], box2d_lidar[:4])
+                    if iou > iou_threshold:
+                        mask[i] = True
+                        break
         return mask
 
     def kitti_object_to_pcdet_object(self, label_path):
@@ -333,7 +332,7 @@ class Visualization(Node):
                        'score': np.array([obj.score for obj in obj_list]),
                        'difficulty': np.array([obj.level for obj in obj_list], np.int32),
                        'box2d': np.array([obj.box2d for obj in obj_list], np.int32),
-                       'corners3d_cam': np.array([obj.corners3d_cam for obj in obj_list], np.float32)}
+                       'corners3d_cam': np.array([obj.corner3d_cam for obj in obj_list], np.float32)}
 
         num_objects = len([obj.cls_type for obj in obj_list if obj.cls_type != 'DontCare'])  # 可用的object数
         num_gt = len(annotations['name'])  # 标签中的object数
@@ -345,18 +344,19 @@ class Visualization(Node):
         rots = annotations['rotation_y'][:num_objects]  # yaw
         score = annotations['score'][:num_objects]
         # points from camera frame->lidar frame
-        loc_lidar = calibration_template.camera_to_lidar_points(loc, self.cal_info)
+        loc_lidar = calibration.camera_to_lidar_points(loc, self.cal_info)
         class_name = annotations['name'][:num_objects]
         box2d = annotations['box2d'][:num_objects]
         corners3d_cam = annotations['corners3d_cam'][:num_objects]
 
-        corners_3d_lidar = np.array([calibration_template.camera_to_lidar_points(corners3d, self.cal_info)
+        corners_3d_lidar = np.array([calibration.camera_to_lidar_points(corners3d, self.cal_info)
                                      for corners3d in corners3d_cam], np.float32)
 
         proj_corners2d_list = []
         proj_corners3d_list = []
         for corners3d in corners_3d_lidar:
-            proj_corners2d, proj_corners3d = calibration_template.corners_3d_to_2d(corners3d, self.cal_info)
+            proj_corners2d, proj_corners3d = calibration.corner_3d8c_2d4c(corners3d, self.cal_info,
+                                                                          frame="lidar")
             proj_corners2d_list.append(proj_corners2d)
             proj_corners3d_list.append(proj_corners3d)
         proj_corners2d_list = np.array(proj_corners2d_list, dtype=np.int32)
@@ -394,7 +394,7 @@ class Visualization(Node):
     def iter_dataset_with_kitti_label(self):
 
         label_paths = sorted(list(Path(self.label_dir_path).glob('*.txt')))
-        start_label_id = 7587
+        start_label_id = 177
         for frame_id, gt_path in enumerate(
                 tqdm(label_paths[start_label_id:],
                      initial=start_label_id, total=len(label_paths), desc='Loading dataset'),
@@ -407,22 +407,27 @@ class Visualization(Node):
             file_idx = gt_path.stem
             image_path = "{}/{}.jpg".format(self.image_dir_path, file_idx)
             lidar_path = "{}/{}.bin".format(self.pointcloud_dir_path, file_idx)
+            # self.prediction_dir_path = "/home/helios/Github/workspace/livox_detection/OpenPCDet/output/livox_models/PartA2_free.kitti/default/eval/epoch_7872/val/default/final_result/data/"
+            # self.prediction_dir_path = "/home/helios/Github/workspace/livox_detection/OpenPCDet/output/livox_models/pointpillar.kitti/default/eval/epoch_7728/val/default/final_result/data/"
+            self.prediction_dir_path = "/home/helios/Github/workspace/livox_detection/OpenPCDet/output/livox_models/second/default/eval/epoch_7862/val/default/final_result/data/"
+
             pred_path = "{}/{}.txt".format(self.prediction_dir_path, file_idx)
 
             # 读取标签数据（真值和预测值）
             gt_infos = self.get_kitti_obj(gt_path)
             if gt_infos is None:
                 continue
-            pred_infos = self.get_kitti_obj(pred_path)
-            if pred_infos is None:
-                continue
+            # pred_infos = self.get_kitti_obj(pred_path)
+            # if pred_infos is None:
+            #     continue
 
             # 读取传感器数据
             image = cv2.imread(image_path)
             pointcloud = load_pointcloud(lidar_path)
 
             # 预测
-            self.predict_and_publish(pointcloud, image, gt_infos, pred_infos=pred_infos)
+            self.predict_and_publish(pointcloud, image, gt_infos, pred_infos=None)
+            # self.update_pred_infos(pred_path, mask)
 
             if self.auto_update:
                 time.sleep(self.update_time)
@@ -430,20 +435,53 @@ class Visualization(Node):
                 input()
 
 
-def ros1_wrapper():
-    Visualization(Node)
+def save_single_prediction_in_kitti_format(single_pred_dict, calib, image_shape, output_path=None):
+    """导出KITTI格式的预测结果
+    :param single_pred_dict:
+    :param output_path:
+    :return:
+    """
 
+    pred_scores = single_pred_dict['pred_scores']
+    pred_boxes = single_pred_dict['pred_boxes']
+    pred_labels = single_pred_dict['pred_labels']
 
-def ros2_wrapper():
-    rclpy.init()
-    node = Visualization()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    pred_boxes_camera = object3d.box3d_from_lidar_to_kitti((pred_boxes, calib))
+    pred_boxes_img = calibration.corner_3d8c_2d4c(
+        pred_boxes_camera, calib, frame="camera", img_shape=image_shape
+    )
+
+    # single_pred_dict['name'] = np.array(class_names)[pred_labels - 1]
+    single_pred_dict['alpha'] = -np.arctan2(-pred_boxes[:, 1], pred_boxes[:, 0]) + pred_boxes_camera[:, 6]
+    single_pred_dict['bbox'] = pred_boxes_img
+    single_pred_dict['dimensions'] = pred_boxes_camera[:, 3:6]
+    single_pred_dict['location'] = pred_boxes_camera[:, 0:3]
+    single_pred_dict['rotation_y'] = pred_boxes_camera[:, 6]
+    single_pred_dict['score'] = pred_scores
+    single_pred_dict['boxes_lidar'] = pred_boxes
+
+    if output_path is not None:
+        cur_det_file = output_path
+        with open(cur_det_file, 'w') as f:
+            bbox = single_pred_dict['bbox']
+            loc = single_pred_dict['location']
+            dims = single_pred_dict['dimensions']  # lhw -> hwl
+
+            for idx in range(len(bbox)):
+                print('%s -1 -1 %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f'
+                      % (single_pred_dict['name'][idx], single_pred_dict['alpha'][idx],
+                         bbox[idx][0], bbox[idx][1], bbox[idx][2], bbox[idx][3],
+                         dims[idx][1], dims[idx][2], dims[idx][0], loc[idx][0],
+                         loc[idx][1], loc[idx][2], single_pred_dict['rotation_y'][idx],
+                         single_pred_dict['score'][idx]), file=f)
 
 
 if __name__ == '__main__':
     if __ROS_VERSION__ == 1:
-        ros1_wrapper()
+        Visualization(Node)
     elif __ROS_VERSION__ == 2:
-        ros2_wrapper()
+        rclpy.init()
+        node = Visualization()
+        rclpy.spin(node)
+        node.destroy_node()
+        rclpy.shutdown()

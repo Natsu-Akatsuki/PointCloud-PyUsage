@@ -1,8 +1,12 @@
 import colorsys
 import pickle
+import random
 
 import yaml
+from ampcl.ros import marker
 from easydict import EasyDict
+from ampcl import filter
+import numpy as np
 
 
 # isort: on
@@ -18,11 +22,11 @@ class Config:
 
         # DatasetParam
         self.dataset_dir = cfg_dict.DatasetParam.dataset_dir
-        self.image_dir_path = cfg_dict.DatasetParam.image_dir_path
-        self.pointcloud_dir_path = cfg_dict.DatasetParam.pointcloud_dir_path
+        self.image_dir_path = cfg_dict.DatasetParam.img_dir
+        self.pointcloud_dir_path = cfg_dict.DatasetParam.pc_dir
         self.label_dir_path = cfg_dict.DatasetParam.label_dir_path
         self.prediction_dir_path = cfg_dict.DatasetParam.prediction_dir_path
-        self.calib_dir_path = cfg_dict.DatasetParam.calib_dir_path
+        self.calib_dir_path = cfg_dict.DatasetParam.cal_dir
 
         # ROSParam
         self.vanilla_pointcloud_topic = cfg_dict.ROSParam.vanilla_pointcloud_topic
@@ -62,22 +66,3 @@ def open_pkl_file(infos_path):
     with open(str(infos_path), 'rb') as f:
         infos = pickle.load(f)
     return infos
-
-
-def generate_colors():
-    """
-    Aadapted from https://github.com/matterport/Mask_RCNN/blob/master/mrcnn/visualize.py
-
-    Generate random colors.
-    To get visually distinct colors, generate them in HSV space then
-    convert to RGB.
-    :return list of colors (each color is a list of len=3)
-    """
-    N = 30
-    brightness = 0.7
-    hsv = [(i / N, 1, brightness) for i in range(N)]
-    colors = list(map(lambda c: colorsys.hsv_to_rgb(*c), hsv))
-    perm = [15, 13, 25, 12, 19, 8, 22, 24, 29, 17, 28, 20, 2, 27, 11, 26, 21, 4, 3, 18, 9, 5, 14, 1, 16, 0, 23, 7, 6,
-            10]
-    colors = [list(colors[idx]) for idx in perm]
-    return colors

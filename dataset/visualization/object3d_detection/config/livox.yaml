@@ -20,6 +20,6 @@ VisParam:
   # description: 自动还是手动触发显示数据（终端按回车键触发下一帧） True or False
   auto: True
   # description: 单位（秒）
-  update_time: 0.1
+  update_time: 0.05
   # description: 是否显示预测结果
   show_prediction: True
