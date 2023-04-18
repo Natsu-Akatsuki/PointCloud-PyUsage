@@ -1,7 +1,6 @@
 from .. import np_to_pointcloud2
 from ...filter import passthrough_filter
 
-
 def publish_pc_by_range(in_pub, out_pub, pointcloud, header, limit_range,
                         point_wise_height_offset=0.0,
                         field="xyzirgb"):

@@ -78,9 +78,8 @@ def create_box3d_model(box3d, stamp,
 
 def create_box3d_marker(box3d, stamp, frame_id="lidar",
                         box3d_ns="shape", box3d_color=(0.0, 0.0, 0.0), box3d_id=0,
-                        class_text_ns="text/class_id", class_text=None,
-                        tracker_text_ns="text/tracker_id", tracker_text=None,
-                        confidence_text_ns="text/confidence", confidence_text=None):
+                        text_ns="text", text=None, text_size=0.8,
+                        line_width=0.05):
     box3d_marker = Marker()
     box3d_marker.header.stamp = stamp
     box3d_marker.header.frame_id = frame_id
@@ -89,7 +88,6 @@ def create_box3d_marker(box3d, stamp, frame_id="lidar",
     box3d_marker.type = Marker.LINE_LIST
     box3d_marker.action = Marker.MODIFY
 
-    line_width = 0.05
     box3d_marker.scale.x = line_width
 
     dimensions = Dimensions(box3d)
@@ -104,53 +102,30 @@ def create_box3d_marker(box3d, stamp, frame_id="lidar",
 
     set_lifetime(box3d_marker, seconds=0.0)
 
-    marker_dict = {"box": box3d_marker}
+    marker_dict = {"box3d_marker": box3d_marker}
 
-    if confidence_text is not None:
-        confident_marker = Marker()
-        confident_marker.header.stamp = stamp
-        confident_marker.header.frame_id = frame_id
-        confident_marker.ns = confidence_text_ns
-        confident_marker.id = box3d_id
-        confident_marker.action = Marker.ADD
-        confident_marker.type = Marker.TEXT_VIEW_FACING
+    if text_ns is not None and text is not None:
+        text_marker = Marker()
+        text_marker.header.stamp = stamp
+        text_marker.header.frame_id = frame_id
+        text_marker.ns = text_ns
+        text_marker.id = box3d_id
+        text_marker.action = Marker.ADD
+        text_marker.type = Marker.TEXT_VIEW_FACING
 
-        set_color(confident_marker, (0.0, 0.0, 1.0, 0.999))
-        set_orientation(confident_marker, [0.0, 0.0, 0.0, 1.0])
-
-        box3d_x = box3d[0]
-        box3d_y = box3d[1]
-        box3d_z = box3d[2] + dimensions.z / 2.0 + 0.5
-        set_position(confident_marker, (box3d_x, box3d_y, box3d_z))
-
-        confident_marker.text = str(np.floor(confidence_text * 100) / 100)
-        confident_marker.scale.z = 0.8  # 设置字体大小
-
-        set_lifetime(confident_marker, seconds=0.0)
-        marker_dict["confident_marker"] = confident_marker
-
-    if tracker_text is not None:
-        tracker_marker = Marker()
-        tracker_marker.header.stamp = stamp
-        tracker_marker.header.frame_id = frame_id
-        tracker_marker.ns = tracker_text_ns
-        tracker_marker.id = box3d_id
-        tracker_marker.action = Marker.ADD
-        tracker_marker.type = Marker.TEXT_VIEW_FACING
-
-        set_color(tracker_marker, (0.0, 0.0, 1.0, 0.999))
-        set_orientation(tracker_marker, [0.0, 0.0, 0.0, 1.0])
+        set_color(text_marker, (0.0, 0.0, 1.0, 0.999))
+        set_orientation(text_marker, [0.0, 0.0, 0.0, 1.0])
 
         box3d_x = box3d[0]
         box3d_y = box3d[1]
         box3d_z = box3d[2] + dimensions.z / 2.0 + 0.5
-        set_position(tracker_marker, (box3d_x, box3d_y, box3d_z))
+        set_position(text_marker, (box3d_x, box3d_y, box3d_z))
 
-        tracker_marker.text = f"ID:{tracker_text}"
-        tracker_marker.scale.z = 0.8  # 设置字体大小
+        text_marker.text = text
+        text_marker.scale.z = text_size  # 设置字体大小
 
-        set_lifetime(tracker_marker, seconds=0.0)
-        marker_dict["tracker_marker"] = tracker_marker
+        set_lifetime(text_marker, seconds=0.0)
+        marker_dict["text_marker"] = text_marker
 
     return marker_dict
 
@@ -274,7 +249,7 @@ def set_position(marker, position=(0.0, 0.0, 0.0)):
     marker.pose.position.z = float(position[2])
 
 
-def cls_id_to_color(cls_id):
+def kitti_cls_id_to_color(cls_id):
     color_maps = {-1: [0.5, 0.5, 0.5],
                   0: [1.0, 0.0, 0.0],
                   1: [0.0, 1.0, 0.0],  # 绿：Vehicle
@@ -295,6 +270,7 @@ def random_colors(N, bright=True):
     To get visually distinct colors, generate them in HSV space then
     convert to RGB.
     """
+    random.seed(233)
     brightness = 1.0 if bright else 0.7
     hsv = [(i / N, 1, brightness) for i in range(N)]
     colors = list(map(lambda c: colorsys.hsv_to_rgb(*c), hsv))
@@ -308,161 +284,47 @@ instance_colors = random_colors(100)
 def instance_id_to_color(instance_id):
     return instance_colors[int(instance_id) % 100]
 
-
-def create_gt_detection_box3d_marker_array(pointcloud, box3d_lidar, pc_color=None,
-                                           box3d_arr_marker=None, stamp=None, frame_id=None,
-                                           box3d_ns="gt/detection/box3d",
-                                           plane_model=None, box3d_wise_height_offset=None,
-                                           use_color=True,
-                                           ):
-    """
-    :param pointcloud: 真值框固定为红色
-    :param box3d_lidar: [N,8] [x, y, z, l, w, h, yaw, cls_id]
-                     or [N,9] [x, y, z, l, w, h, yaw, cls_id, tracker_id]
-    :param pc_color: 修订传进去的点云颜色字段（为引用）
-    :param box3d_arr_marker:
-    :param stamp:
-    :param frame_id:
-    :param box3d_ns:
-    :param tracker_text_ns:
-    :param plane_model:
-    :param box3d_wise_height_offset:
-    :param use_color:
-    :return:
-    """
+def create_box3d_marker_array(box3d_marker_array, box3d_lidar,
+                              stamp, frame_id,
+                              box3d_ns="box3d",
+                              color_method=None,
+                              line_width=0.05,
+                              text_ns="text", text_list=None, text_size=0.8,
+                              pc_np=None, pc_color=None):
     if box3d_lidar.shape[0] == 0:
-        return box3d_lidar
+        return
+    if len(box3d_lidar.shape) != 2:
+        raise ValueError("box3d_lidar must be a 2D array")
 
-    box3d_lidar = box3d_lidar.copy()
+    box3d_color = [0, 0, 0]
     for i in range(box3d_lidar.shape[0]):
         a_box3d_lidar = box3d_lidar[i]
+        text = str(text_list[i]) if text_list is not None else None
 
-        if a_box3d_lidar[7] == -1:
-            continue
+        if color_method == "class":
+            cls_id = int(a_box3d_lidar[7])
+            box3d_color = kitti_cls_id_to_color(cls_id)
+        elif color_method == "instance":
+            instance_id = int(a_box3d_lidar[8])
+            box3d_color = instance_id
+        elif color_method is None:
+            box3d_color = box3d_color
+        else:
+            pass
 
-        # 提取box中的激光点
-        if pc_color is not None:
-            box3d_color = cls_id_to_color(a_box3d_lidar[7])
-            inside_points_idx = get_indices_of_points_inside(pointcloud, a_box3d_lidar, margin=0.1)
+        if pc_np is not None and pc_color is not None:
+            inside_points_idx = get_indices_of_points_inside(pc_np, a_box3d_lidar, margin=0.1)
             pc_color[inside_points_idx] = box3d_color
-
-        # 对marker的高度进行的修正
-        if plane_model is not None and box3d_wise_height_offset is not None:
-            A, B, C, D = plane_model
-            a_box3d_lidar[2] += -(A * a_box3d_lidar[0] + B * a_box3d_lidar[1] + D) / C - box3d_wise_height_offset
-        elif box3d_wise_height_offset is not None:
-            a_box3d_lidar[2] += -box3d_wise_height_offset
-        box3d_color = (1.0, 0.0, 0.0)
-        marker_dict = create_box3d_marker(a_box3d_lidar,
-                                          stamp, frame_id=frame_id,
-                                          box3d_id=i, box3d_ns=box3d_ns, box3d_color=box3d_color)
-
-        box3d_arr_marker.markers += list(marker_dict.values())
-    return box3d_lidar
-
-
-def create_pred_detection_box3d_marker_array(pointcloud, box3d_lidar, pc_color=None, score=None,
-                                             box3d_arr_marker=None, stamp=None, frame_id=None,
-                                             box3d_ns="pred/detection/box3d",
-                                             plane_model=None, box3d_wise_height_offset=None,
-                                             ):
-    """ 预测预测框的颜色与类别颜色所绑定
-    :param pointcloud:
-    :param box3d_lidar: [N,8] [x, y, z, l, w, h, yaw, cls_id]
-                     or [N,9] [x, y, z, l, w, h, yaw, cls_id, tracker_id]
-    :param pc_color: 修订传进去的点云颜色字段（为引用）
-    :param box3d_arr_marker:
-    :param stamp:
-    :param frame_id:
-    :param box3d_ns:
-    :param tracker_text_ns:
-    :param plane_model:
-    :param box3d_wise_height_offset:
-    :param use_color:
-    :return:
-    """
-    if box3d_lidar.shape[0] == 0:
-        return box3d_lidar
-
-    box3d_lidar = box3d_lidar.copy()
-    for i in range(box3d_lidar.shape[0]):
-        a_box3d_lidar = box3d_lidar[i]
-
-        box3d_color = cls_id_to_color(a_box3d_lidar[7])
-
-        # 提取box中的激光点
-        if pc_color is not None:
-            inside_points_idx = get_indices_of_points_inside(pointcloud, a_box3d_lidar, margin=0.1)
-            pc_color[inside_points_idx] = box3d_color
-
-        # 对marker的高度进行的修正
-        if plane_model is not None and box3d_wise_height_offset is not None:
-            A, B, C, D = plane_model
-            a_box3d_lidar[2] += -(A * a_box3d_lidar[0] + B * a_box3d_lidar[1] + D) / C - box3d_wise_height_offset
-        elif box3d_wise_height_offset is not None:
-            a_box3d_lidar[2] += -box3d_wise_height_offset
 
         marker_dict = create_box3d_marker(a_box3d_lidar,
                                           stamp, frame_id=frame_id,
-                                          box3d_id=i, box3d_ns=box3d_ns, box3d_color=box3d_color,
-                                          confidence_text_ns="pred/detection/text/confidence",
-                                          confidence_text=score[i])
+                                          box3d_id=i, box3d_ns=box3d_ns,
+                                          box3d_color=box3d_color,
+                                          text_ns=text_ns, text=text,
+                                          line_width=line_width,
+                                          text_size=text_size)
 
-        box3d_arr_marker.markers += list(marker_dict.values())
-    return box3d_lidar
-
-
-def create_pred_tracker_box3d_marker_array(pointcloud, box3d_lidar, pc_color=None,
-                                           box3d_arr_marker=None, stamp=None, frame_id=None,
-                                           box3d_ns="pred/tracker/box3d",
-                                           tracker_text_ns="pred/tracker/text/tracker_id",
-                                           plane_model=None, box3d_wise_height_offset=None,
-                                           ):
-    """ 预测跟踪框默认为红色（其他颜色需修改对应源码）
-    :param pointcloud:
-    :param box3d_lidar: [N,8] [x, y, z, l, w, h, yaw, cls_id]
-                     or [N,9] [x, y, z, l, w, h, yaw, cls_id, tracker_id]
-    :param pc_color: 修订传进去的点云颜色字段（为引用）
-    :param box3d_arr_marker:
-    :param stamp:
-    :param frame_id:
-    :param box3d_ns:
-    :param tracker_text_ns:
-    :param plane_model:
-    :param box3d_wise_height_offset:
-    :param use_color:
-    :return:
-    """
-    if box3d_lidar.shape[0] == 0:
-        return box3d_lidar
-
-    box3d_lidar = box3d_lidar.copy()
-    for i in range(box3d_lidar.shape[0]):
-        a_box3d_lidar = box3d_lidar[i]
-
-        box3d_color = instance_id_to_color(a_box3d_lidar[8])
-        tracker_text = a_box3d_lidar[8]
-
-        # 提取box中的激光点
-        if pc_color is not None:
-            inside_points_idx = get_indices_of_points_inside(pointcloud, a_box3d_lidar, margin=0.1)
-            pc_color[inside_points_idx] = box3d_color
-
-        # 对Marker的高度进行的修正
-        if plane_model is not None and box3d_wise_height_offset is not None:
-            A, B, C, D = plane_model
-            a_box3d_lidar[2] += -(A * a_box3d_lidar[0] + B * a_box3d_lidar[1] + D) / C - box3d_wise_height_offset
-        elif box3d_wise_height_offset is not None:
-            a_box3d_lidar[2] += -box3d_wise_height_offset
-
-        box3d_color = (1.0, 0.0, 0.0)
-        marker_dict = create_box3d_marker(a_box3d_lidar,
-                                          stamp, frame_id=frame_id,
-                                          box3d_id=i, box3d_ns=box3d_ns, box3d_color=box3d_color,
-                                          tracker_text_ns=tracker_text_ns, tracker_text=tracker_text)
-
-        box3d_arr_marker.markers += list(marker_dict.values())
-    return box3d_lidar
+        box3d_marker_array.markers += list(marker_dict.values())
 
 
 def init_marker_array():
