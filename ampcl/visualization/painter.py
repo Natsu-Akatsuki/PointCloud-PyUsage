@@ -27,8 +27,7 @@ def paint_box2d_on_img(img, box2d, cls_idx=None):
             x1, y1 = int(box[0]), int(box[1])
             x2, y2 = int(box[2]), int(box[3])
             sub_img = img[y1:y2, x1:x2]
-            mask = np.full((sub_img.shape[0], 3), np.array([170, 255, 127]), dtype=np.uint8)
-            # mask = np.ones(sub_img.shape, dtype=np.uint8) * 0
+            mask = np.full(sub_img.shape, np.array([170, 255, 127]), dtype=np.uint8)
             ret = cv2.addWeighted(sub_img, 0.6, mask, 0.4, 1.0)
             img[y1:y2, x1:x2] = ret
             continue
