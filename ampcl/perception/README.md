@@ -2,9 +2,12 @@
 
 ## Ground segmentation
 
-### Model-based
+### Implementation
 
 #### RANSAC
+
+- 论文：Random sample consensus: a paradigm for model fitting with applications to image analysis and automated cartography
+- 示例代码：
 
 ```python
 from ampcl.perception import ground_segmentation_ransac
@@ -18,9 +21,9 @@ ground_pc = pc_np[ground_mask]
 non_ground_pc = pc_np[~ground_mask]
 ```
 
-![image-20230321230330622](/home/helios/Github/PointCloud-PyUsage/ampcl/perception/docs/ransac-indoor.png)
+![image-20230321230330622](docs/ransac-indoor.png)
 
-## GPF
+#### GPF
 
 - **论文**：Fast Segmentation of 3D Point Clouds: A Paradigm on LiDAR Data for Autonomous Vehicle Applications
 - **亮点**：coarse to fine（更准确的地面点和更准确的平面模型）, PCA计算地平面模型
@@ -33,7 +36,7 @@ non_ground_pc = pc_np[~ground_mask]
 - **示例代码**：
 
 ```python
-# pybind版本
+# pybind版本（recommend）
 from ampcl.perception import ground_segmentation_gpf
 from ampcl.io import load_pointcloud
 
@@ -50,4 +53,32 @@ gpf = GPF()
 non_ground_pointcloud = gpf.apply(pc_np, debug=False)
 ```
 
-<img src="/home/helios/Github/PointCloud-PyUsage/ampcl/perception/docs/gpf-kitti.png" alt="image-20230420013022459" style="zoom:67%;" />
+<img src="docs/gpf-kitti.png" alt="image-20230420013022459" style="zoom:67%;" />
+
+
+
+### Data
+
+#### Speed
+
+|       Method        | Speed |
+| :-----------------: | :---: |
+|       LineFit       |   —   |
+|         GPF         |   —   |
+|       RANSAC        |   —   |
+|        R-GPF        |   —   |
+|     CascadedSeg     |   —   |
+|      Patchwork      |   —   |
+|     Patchwork++     |   —   |
+| Patchwork++ w/o TGR |   —   |
+
+## TODO
+
+- [ ] 添加其他方案的Python实现和C++实现
+- [ ] 感受一波[Ground Segmentation BenchMark](https://github.com/url-kaist/Ground-Segmentation-Benchmark)
+
+## Supplementation
+
+- [awesome ground segmentation](docs/awesome_ground_segmentation.md)
+
+## 
