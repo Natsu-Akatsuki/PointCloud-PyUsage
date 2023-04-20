@@ -7,11 +7,12 @@ import yaml
 from ampcl.calibration import object3d_kitti, calibration
 from ampcl.calibration.calibration_kitti import KITTICalibration
 from ampcl.io import load_pointcloud
-from ampcl.perception import ground_segmentation_ransac
+from ampcl.perception import cEuclideanCluster, ground_segmentation_gpf
 from ampcl.ros import marker, publisher
 from ampcl.visualization import color_o3d_to_color_ros, paint_box2d_on_img
 from easydict import EasyDict
 from tqdm import tqdm
+from ampcl.ros.marker import instance_id_to_color
 
 # isort: off
 try:
@@ -45,6 +46,7 @@ class Visualization(Node):
         super().__init__("visualization")
         self.init_param()
         self.load_dataset()
+        self.init_model()
 
     def init_param(self):
         cfg_file = "config/kitti.yaml"
@@ -55,7 +57,7 @@ class Visualization(Node):
         self.frame_id = cfg.ROSParam.frame_id
 
         if __ROS_VERSION__ == 1:
-            # TODO
+            # TODO：补充ROS1的接口
             pass
         if __ROS_VERSION__ == 2:
             latching_qos = QoSProfile(depth=10, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
@@ -68,14 +70,15 @@ class Visualization(Node):
 
                 # 预测框（相机二维框，激光雷达四角点二维框（融合前和融合后），激光雷达八角点二维框）
                 "/pred/img/box2d4c_cam": self.create_publisher(Image, "/pred/img/box2d4c_cam", latching_qos),
-                "/pred/img/box2d_lidar": self.create_publisher(Image, "/pred/img/box2d_lidar", latching_qos),
+                "/pred/img/box2d4c_lidar": self.create_publisher(Image, "/pred/img/box2d4c_lidar", latching_qos),
                 "/pred/img/box2d4c_lidar2": self.create_publisher(Image, "/pred/img/box2d4c_lidar2", latching_qos),
 
                 # marker
                 "/box3d_marker": self.create_publisher(MarkerArray, "/box3d_marker", latching_qos),
                 "/distance_marker": self.create_publisher(MarkerArray, "/distance_marker", latching_qos),
 
-                # pc（区域内的点云和区域外的点云）
+                # pc（地面点，区域内的点云和区域外的点云）
+                "/pc/ground": self.create_publisher(PointCloud2, "/pc/ground", latching_qos),
                 "/pc/in_region": self.create_publisher(PointCloud2, "/pc/in_region", latching_qos),
                 "/pc/out_region": self.create_publisher(PointCloud2, "/pc/out_region", latching_qos)
             }
@@ -94,11 +97,14 @@ class Visualization(Node):
             self.pc_dir = dataset_dir / cfg.DatasetParam.pc_dir
             self.gt_label_dir = dataset_dir / cfg.DatasetParam.gt_label_dir
             self.cal_dir = dataset_dir / cfg.DatasetParam.cal_dir
+            self.split_file = dataset_dir / cfg.DatasetParam.split_file
+
+    def init_model(self):
+        pass
 
     def load_dataset(self):
 
-        split_file = "/home/helios/mnt/dataset/Kitti/object/ImageSets/train.txt"
-        with open(split_file, 'r') as f:
+        with open(self.split_file, 'r') as f:
             lines = f.readlines()
 
         pbar = tqdm(lines)
@@ -126,7 +132,7 @@ class Visualization(Node):
             if self.auto_update:
                 time.sleep(self.update_time)
             else:
-                input()
+                input(f" press ↵ to continue...")
 
     def publish_result(self, pc_np, img, gt_info, cal_info):
 
@@ -140,16 +146,40 @@ class Visualization(Node):
             _, _, mask = calibration.lidar_to_pixel(pc_np, cal_info, img_shape=img.shape[:2], use_mask=True)
             pc_np = pc_np[mask]
 
-        pc_color = np.full((pc_np.shape[0], 3), np.array([0.8, 0.8, 0.8]))
         # 地面分割
-        if 1:
-            limit_range = (0, 50, -10, 10, -2.5, -1.5)  # KITTI数据集
-            plane_model, ground_mask = ground_segmentation_ransac(pc_np, limit_range, distance_threshold=0.1,
-                                                                  debug=False)
-            pc_color[ground_mask] = [0.61, 0.46, 0.33]
+        ground_mask = ground_segmentation_gpf(pc_np, debug=False)
+        non_ground_pc = pc_np[~ground_mask]
+        ground_pc = pc_np[ground_mask]
+        publisher.publish_pc(self.pub_dict["/pc/ground"],
+                             ground_pc,
+                             header,
+                             field="xyzi",
+                             )
 
-        # 聚类分割：
-        # todo
+        # 聚类分割
+        pc_color = np.full((non_ground_pc.shape[0], 3), np.array([0.8, 0.8, 0.8]))
+        cluster_idx_list = cEuclideanCluster(non_ground_pc, tolerance=0.5, min_size=20, max_size=30000)
+        cluster_list = []
+        for i, cluster_idx in enumerate(cluster_idx_list):
+            pc_color[cluster_idx] = instance_id_to_color(i)
+            cluster = non_ground_pc[cluster_idx]
+            cluster_list.append(cluster)
+
+        # 将聚类点云团投影到图像下
+        cluster_2d4c_list = []
+        for cluster in cluster_list:
+            cluster_pixel, _, _ = calibration.lidar_to_pixel(cluster, cal_info, img_shape=img.shape[:2], use_mask=False)
+            x1 = np.min(cluster_pixel[:, 0])
+            y1 = np.min(cluster_pixel[:, 1])
+            x2 = np.max(cluster_pixel[:, 0])
+            y2 = np.max(cluster_pixel[:, 1])
+            cluster_2d4c_list.append([x1, y1, x2, y2, 0])
+        cluster_2d4c_list = np.array(cluster_2d4c_list)
+
+        img_debug = paint_box2d_on_img(img.copy(), cluster_2d4c_list, cls_idx=cluster_2d4c_list[:, 4])
+        publisher.publish_img(img_debug, self.pub_dict["/pred/img/box2d4c_lidar"], stamp, self.frame_id)
+
+        # TODO：追加显示凸包的marker
 
         if gt_info is not None:
             # Debug: 发布图像2D真值框
@@ -158,12 +188,12 @@ class Visualization(Node):
             img_debug = paint_box2d_on_img(img.copy(), gt_box2d4c, cls_idx=gt_box2d4c[:, 4])
             publisher.publish_img(img_debug, self.pub_dict["/gt/img/box2d4c_cam"], stamp, self.frame_id)
             marker.create_box3d_marker_array(box3d_marker_array, gt_box3d_lidar, stamp, self.frame_id,
-                                             color_method="class",
-                                             pc_np=pc_np, pc_color=pc_color,
+                                             color_method=None,
+                                             pc_np=None, pc_color=None,
                                              box3d_ns="gt/detection/box3d")
 
         colors_ros = color_o3d_to_color_ros(pc_color)
-        pc_infer = np.column_stack((pc_np, colors_ros))
+        pc_infer = np.column_stack((non_ground_pc, colors_ros))
         publisher.publish_pc_by_range(self.pub_dict["/pc/in_region"],
                                       self.pub_dict["/pc/out_region"],
                                       pc_infer,

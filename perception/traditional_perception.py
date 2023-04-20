@@ -7,7 +7,7 @@ from ampcl.perception import cEuclideanCluster, ground_segmentation_gpf
 from ampcl.ros.marker import instance_id_to_color
 from funcy import print_durations
 
-from shape_estimation import convex_hull
+from ampcl.perception.shape_estimation import ConvexHullModel
 
 
 @print_durations()
@@ -37,7 +37,7 @@ def shape_estimation(clusters, debug=False, o3d_objs=None):
     if o3d_objs is None:
         o3d_objs = list()
 
-    convex_model = convex_hull.ShapeModel()
+    convex_model = ConvexHullModel()
 
     cluster_shapes = []
     for i, cluster in enumerate(clusters):

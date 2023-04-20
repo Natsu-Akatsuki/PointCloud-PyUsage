@@ -1,0 +1,29 @@
+DatasetParam:
+  # description (mandatory): 数据集的文件夹路径
+  dataset_dir: "/home/helios/mnt/dataset/Kitti/object/"
+  # description (optional): 相对于dataset_dir的子目录，存放图像数据
+  img_dir: "training/image_2"
+  # description (optional): 相对于dataset_dir的子目录，存放点云数据
+  pc_dir: "training/velodyne"
+  # description (optional): 相对于dataset_dir的子目录，存放真值标签
+  gt_label_dir: "training/label_2"
+  # description (optional): 相对于dataset_dir的子目录，存放标定文件
+  cal_dir: "training/calib"
+  # description (optional): 相对于dataset_dir的子目录，存放split文件，
+  # 可从https://github.com/open-mmlab/OpenPCDet/tree/master/data/kitti/ImageSets处下载
+  split_file: "ImageSets/train.txt"
+
+AlgorithmParam:
+  # description (optional)：直通滤波的相关参数 x_min, x_max, y_min, y_max, z_min, z_max
+  limit_range: [0.0, 70.4, -40.0, 40.0, -3.0, 1.0]
+  # description (optional): 自动还是手动触发显示数据（终端按回车键触发下一帧） True or False
+  auto_update: False
+  # description (optional): 单位（秒）
+  update_time: 0.5
+  # description (optional): 是否只显示相机视野内的点云
+  apply_fov_filter: True
+
+ROSParam:
+  # description: 发布的主题所绑定的坐标系
+  frame_id: "velodyne"
+
