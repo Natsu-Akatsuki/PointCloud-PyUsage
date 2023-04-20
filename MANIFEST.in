@@ -5,4 +5,5 @@ include ampcl/filter/src/filter_pyb.cpp
 include ampcl/filter/CMakeLists.txt
 
 include ampcl/perception/src/gpf_pyb.cpp
+include ampcl/perception/src/euclidean_cluster_pyb.cpp
 include ampcl/perception/CMakeLists.txt

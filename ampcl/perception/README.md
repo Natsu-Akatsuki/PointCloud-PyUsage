@@ -6,8 +6,8 @@
 
 #### RANSAC
 
-- 论文：Random sample consensus: a paradigm for model fitting with applications to image analysis and automated cartography
-- 示例代码：
+- **论文**：Random sample consensus: a paradigm for model fitting with applications to image analysis and automated cartography
+- **示例代码**：
 
 ```python
 from ampcl.perception import ground_segmentation_ransac
@@ -72,13 +72,43 @@ non_ground_pointcloud = gpf.apply(pc_np, debug=False)
 |     Patchwork++     |   —   |
 | Patchwork++ w/o TGR |   —   |
 
+## Cluster Segmentation
+
+### Implementation
+
+#### Euclidean Cluster
+
+- **示例代码**：
+
+```python
+import open3d as o3d
+from ampcl import io
+from ampcl.ros.marker import instance_id_to_color
+from ampcl.perception import cEuclideanCluster
+
+pc_np = io.load_pointcloud("去地面后的点云.pcd")
+cluster_idx_list = cEuclideanCluster(pc_np, tolerance=0.5, min_size=20, max_size=10000)
+
+o3d_objs = []
+for i, cluster_idx in enumerate(cluster_idx_list):
+    cluster = pc_np[cluster_idx, :3]
+    cluster_o3d = o3d.geometry.PointCloud()
+    cluster_o3d.points = o3d.utility.Vector3dVector(cluster)
+    cluster_o3d.paint_uniform_color(instance_id_to_color(i))
+    o3d_objs.append(cluster_o3d)
+
+o3d.visualization.draw_geometries(o3d_objs)
+```
+
+<img src="docs/eucluster-kitti.png" alt="image-20230420161451242" style="zoom: 67%;" />
+
 ## TODO
 
 - [ ] 添加其他方案的Python实现和C++实现
 - [ ] 感受一波[Ground Segmentation BenchMark](https://github.com/url-kaist/Ground-Segmentation-Benchmark)
+- [ ] 分析性能瓶颈
+- [ ] 追加多线程、CUDA实现
 
 ## Supplementation
 
 - [awesome ground segmentation](docs/awesome_ground_segmentation.md)
-
-## 
