@@ -1,6 +1,22 @@
 from .. import np_to_pointcloud2
 from ...filter import passthrough_filter
 
+
+def publish_pc(pub, pc_np, header,
+               field="xyzirgb"):
+    """
+    :param pub:
+    :param pc_np:
+    :param header:
+    :param field:
+    :return:
+    """
+
+    if pub.get_subscription_count() > 0:
+        pc_msg = np_to_pointcloud2(pc_np, header, field=field)
+        pub.publish(pc_msg)
+
+
 def publish_pc_by_range(in_pub, out_pub, pointcloud, header, limit_range,
                         point_wise_height_offset=0.0,
                         field="xyzirgb"):
