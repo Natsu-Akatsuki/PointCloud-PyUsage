@@ -3,3 +3,6 @@ include ampcl/io/CMakeLists.txt
 
 include ampcl/filter/src/filter_pyb.cpp
 include ampcl/filter/CMakeLists.txt
+
+include ampcl/perception/src/gpf_pyb.cpp
+include ampcl/perception/CMakeLists.txt
