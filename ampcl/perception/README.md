@@ -32,7 +32,13 @@ non_ground_pc = pc_np[~ground_mask]
 - **算法流程**：
 
 1. 去除因镜面反射而产生的噪点（移除太低的点：-1.5×传感器相对地面的高度）
+
+<p align="center">
+<img src="docs/reflected_noise.png" alt="img" width=100% height=100% />
+</p>
+
 2. 选取地面种子点（前n个z值最低的点的均值+高度offset作为种子点的z轴阈值，保留低于该阈值的点），基于PCA生成地平面模型
+
 3. 基于地平面模型，获取新的地面点，并基于该新的地面点更新地平面模型，重复该步骤多次
 
 - **示例代码**：
