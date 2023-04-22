@@ -1,9 +1,11 @@
 import argparse
 import os
 
+import numpy as np
 import open3d as o3d
 from ampcl.io import load_pointcloud
-from ampcl.perception import cEuclideanCluster, ground_segmentation_gpf
+from ampcl.perception import cEuclideanCluster, cRangeImgCluster
+from ampcl.perception import ground_segmentation_gpf
 from ampcl.ros.marker import instance_id_to_color
 from funcy import print_durations
 
@@ -46,14 +48,22 @@ def shape_estimation(clusters, debug=False, o3d_objs=None):
 
         if debug:
             o3d_objs.append(convex_model.generate_polygon_o3d())
-            o3d_objs.append(convex_model.generate_centroid_o3d())
+            # o3d_objs.append(convex_model.generate_centroid_o3d())
 
     return cluster_shapes
 
 
 @print_durations()
 def cluster_segmentation(non_ground_pc, o3d_objs, debug=False):
-    cluster_idx_list = cEuclideanCluster(non_ground_pc, tolerance=0.5, min_size=20, max_size=30000)
+    # 算法一：欧式聚类
+    # cluster_idx_list = cEuclideanCluster(non_ground_pc, tolerance=0.5, min_size=20, max_size=30000)
+
+    # 算法二：range-image聚类
+    range_img_cluster = cRangeImgCluster(horizon_res=0.15, vertical_res=0.4,
+                                         threshold_h=10, threshold_v=10,
+                                         img_width=1800, img_height=64)
+
+    cluster_idx_list = range_img_cluster.cluster(non_ground_pc)
     cluster_list = []
     for i, cluster_idx in enumerate(cluster_idx_list):
         cluster = non_ground_pc[cluster_idx]
@@ -80,8 +90,9 @@ if __name__ == '__main__':
         pc_np = load_pointcloud(pc_file)
 
         o3d_objs = []
+
         # 步骤一：地面分割
-        non_ground_pc = ground_segmentation(pc_np, o3d_objs, debug=True)
+        non_ground_pc = ground_segmentation(pc_np, o3d_objs, debug=False)
 
         # 步骤二：聚类分割
         cluster_list = cluster_segmentation(non_ground_pc, o3d_objs, debug=True)

@@ -21,7 +21,9 @@ ground_pc = pc_np[ground_mask]
 non_ground_pc = pc_np[~ground_mask]
 ```
 
-![image-20230321230330622](docs/ransac-indoor.png)
+<p align="center">
+<img src="docs/ransac-indoor.png" alt="img" width=80% height=80% />
+</p>
 
 #### GPF
 
@@ -53,9 +55,9 @@ gpf = GPF()
 non_ground_pointcloud = gpf.apply(pc_np, debug=False)
 ```
 
-<img src="docs/gpf-kitti.png" alt="image-20230420013022459" style="zoom:67%;" />
-
-
+<p align="center">
+<img src="docs/gpf-kitti.png" alt="img" width=60% height=60% />
+</p>
 
 ### Data
 
@@ -100,14 +102,50 @@ for i, cluster_idx in enumerate(cluster_idx_list):
 o3d.visualization.draw_geometries(o3d_objs)
 ```
 
-<img src="docs/eucluster-kitti.png" alt="image-20230420161451242" style="zoom: 67%;" />
+<p align="center">
+<img src="docs/eucluster-kitti.png" alt="img" width=80% height=80% />
+</p>
 
+
+#### Range-Based Cluster
+
+- **论文**：Fast range image-based segmentation of sparse 3D laser scans for online operation
+- **示例代码**：
+
+```python
+import open3d as o3d
+from ampcl import io
+from ampcl.ros.marker import instance_id_to_color
+from ampcl.perception import cRangeImgCluster
+
+pc_np = io.load_pointcloud("去地面后的点云.pcd")
+range_img_cluster = cRangeImgCluster(horizon_res=0.15, vertical_res=0.4,
+                                     threshold_h=10, threshold_v=10,
+                                     img_width=1800, img_height=64)
+
+cluster_idx_list = range_img_cluster.cluster(non_ground_pc)
+
+o3d_objs = []
+for i, cluster_idx in enumerate(cluster_idx_list):
+    cluster = pc_np[cluster_idx, :3]
+    cluster_o3d = o3d.geometry.PointCloud()
+    cluster_o3d.points = o3d.utility.Vector3dVector(cluster)
+    cluster_o3d.paint_uniform_color(instance_id_to_color(i))
+    o3d_objs.append(cluster_o3d)
+
+o3d.visualization.draw_geometries(o3d_objs)
+```
+
+<p align="center">
+<img src="docs/range-img-cluster-kitti.png" alt="img" width=80% height=80% />
+</p>
 ## TODO
 
 - [ ] 添加其他方案的Python实现和C++实现
 - [ ] 感受一波[Ground Segmentation BenchMark](https://github.com/url-kaist/Ground-Segmentation-Benchmark)
 - [ ] 分析性能瓶颈
 - [ ] 追加多线程、CUDA实现
+- [ ] 补充相关的参数说明
 
 ## Supplementation
 
