@@ -1,8 +1,7 @@
 from colorama import Fore, Style
+from pathlib import Path
 
 try:
-    from pathlib import Path
-
     from .io_pyb import cLoadPCD
 
 

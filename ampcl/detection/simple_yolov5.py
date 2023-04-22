@@ -22,7 +22,7 @@ class SimpleYolo:
         self.model = torch.hub.load("ultralytics/yolov5", "yolov5x")
         self.cls_id_map = cls_id_map
 
-    def infer(self, img, keep_idx=None):
+    def infer(self, img, keep_idx=None, use_conf=False):
         """
         :param img:
         :param list keep_idx: 只保留特定类别的box
@@ -37,6 +37,20 @@ class SimpleYolo:
                 continue
             xyxy = results.pred[0][:, :4].cpu().numpy()
             conf = results.pred[0][:, 4].cpu().numpy()
-            box2d.append(np.hstack((xyxy[i], conf[i], cls[i])))
+            box2d.append(np.hstack((xyxy[i], cls[i], conf[i])))
         box2d = np.asarray(box2d)
+        return box2d
+
+    def infer_and_remap(self, img, keep_idx=None):
+        box2d = self.infer(img, keep_idx)
+        id_remap_dict = {
+            0: 2,  # person -> Pedestrian
+            1: 3,  # bicycle -> Cyclist
+            2: 1,  # car->Car
+            3: 3,  # motorcycle->Cyclist
+            5: 1,  # bus -> Car
+            7: 1  # truck -> Car
+        }
+        for i in range(box2d.shape[0]):
+            box2d[i, 4] = id_remap_dict[box2d[i, 4]]
         return box2d
