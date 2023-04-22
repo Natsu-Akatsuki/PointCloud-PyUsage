@@ -18,7 +18,7 @@ def o3d_viewer_from_pointcloud(pointcloud, is_normalized=False, colors=None,
     if pointcloud.shape[1] == 4:
         if colors is None:
             # 没有显式提供颜色时，则使用强度伪彩色
-            intensity = pointcloud[:, 3].astype(np.uint8)
+            intensity = pointcloud[:, 3]
             colors = intensity_to_color_o3d(intensity, is_normalized=is_normalized)
         pointcloud_o3d.colors = o3d.utility.Vector3dVector(colors)
 
@@ -26,7 +26,7 @@ def o3d_viewer_from_pointcloud(pointcloud, is_normalized=False, colors=None,
         o3d_list = [pointcloud_o3d]
         if show_axis is True:
             o3d_list.append(o3d.geometry.TriangleMesh.create_coordinate_frame(size=axis_size, origin=[0, 0, 0]))
-        o3d.visualization.draw_geometries(o3d_list, width=800, height=500)
+        o3d.visualization.draw_geometries(o3d_list, width=width, height=height)
     else:
         return pointcloud_o3d
 

@@ -40,6 +40,8 @@ def intensity_to_color(intensity):
 def intensity_to_color_o3d(intensity, is_normalized=False):
     if is_normalized:
         intensity = np.uint8(intensity * 255)
+    else:
+        intensity = np.uint8(intensity)
 
     color_channel = intensity_to_color(intensity).view(np.uint32)
 
