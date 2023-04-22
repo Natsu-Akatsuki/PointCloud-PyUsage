@@ -139,6 +139,7 @@ o3d.visualization.draw_geometries(o3d_objs)
 <p align="center">
 <img src="docs/range-img-cluster-kitti.png" alt="img" width=80% height=80% />
 </p>
+
 ## TODO
 
 - [ ] 添加其他方案的Python实现和C++实现
@@ -146,6 +147,7 @@ o3d.visualization.draw_geometries(o3d_objs)
 - [ ] 分析性能瓶颈
 - [ ] 追加多线程、CUDA实现
 - [ ] 补充相关的参数说明
+- [ ] 根据Lego-LOAM的实现对range image进行工程化的优化以提速
 
 ## Supplementation
 
