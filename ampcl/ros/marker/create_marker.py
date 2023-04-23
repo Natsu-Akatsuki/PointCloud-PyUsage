@@ -284,6 +284,7 @@ instance_colors = random_colors(100)
 def instance_id_to_color(instance_id):
     return instance_colors[int(instance_id) % 100]
 
+
 def create_box3d_marker_array(box3d_marker_array, box3d_lidar,
                               stamp, frame_id,
                               box3d_ns="box3d",
@@ -306,7 +307,7 @@ def create_box3d_marker_array(box3d_marker_array, box3d_lidar,
             box3d_color = kitti_cls_id_to_color(cls_id)
         elif color_method == "instance":
             instance_id = int(a_box3d_lidar[8])
-            box3d_color = instance_id
+            box3d_color = instance_id_to_color(instance_id)
         elif color_method is None:
             box3d_color = box3d_color
         else:
