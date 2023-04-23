@@ -17,9 +17,9 @@ def get_calib_from_file(calib_file):
                            np.asarray(lines[12].strip().split(), dtype=np.float32),
                            ))
 
-    return {'intri_matrix': intri_mat,  # (3,3)
+    return {'intri_mat': intri_mat,  # (3,3)
             'distor': distor,  # 4
-            'extri_matrix': extri_mat  # (4,4)
+            'extri_mat': extri_mat  # (4,4)
             }
 
 
@@ -27,9 +27,15 @@ class LivoxCalibration():
     def __init__(self, calib_file):
         if not isinstance(calib_file, dict):
             calib = get_calib_from_file(calib_file)
-        else:
-            calib = calib_file
+            self.intri_mat = calib['intri_mat']
+            self.distor = calib['distor']
+            self.extri_mat = calib['extri_mat']
 
-        self.intri_mat = calib['intri_mat']
-        self.distor = calib['distor']
-        self.extri_mat = calib['extri_mat']
+            cal_info = {'extri_mat': self.extri_mat,
+                        'intri_mat': self.intri_mat,
+                        'distor': self.distor}
+
+        else:
+            cal_info = calib_file
+
+        self.cal_info = cal_info

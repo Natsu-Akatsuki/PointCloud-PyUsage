@@ -32,6 +32,8 @@ def paint_pointcloud(pc_np, img, cal_info, debug=False, publisher=None, header=N
     # 保留在图像内的点云和相机前的点云
     pixel_coord, _, mask = lidar_to_pixel(pc_np, cal_info, img_shape, use_mask=True)
 
+    pc_not_in_img = pc_np[~mask]
+
     pc_filtered = pc_np[mask]
 
     # 索引颜色值

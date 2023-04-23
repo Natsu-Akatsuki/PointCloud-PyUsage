@@ -1,4 +1,5 @@
 import numpy as np
+from geometry_msgs.msg import TransformStamped
 from scipy.spatial.transform import Rotation
 
 # isort: off
@@ -92,39 +93,70 @@ def euler_from_transformation(tf_mat):
     rotation.as_euler('ZYX', degrees=True)
 
 
-def transform_box3d_frame_by_ros(self, box3d_src, target_frame, src_frame):
-    """
-    将src_frame的box3d转换到target_frame
-    """
-    box3d_target = box3d_src.copy()
-    xyz = box3d_target[:, :3]
-    xyz = np.hstack((xyz, np.ones((xyz.shape[0], 1))))
-
+def listen_transform(tf_buffer, target_frame, source_frame):
     try:
-        t = self.tf_buffer.lookup_transform(
-            target_frame,
-            src_frame,
-            rclpy.time.Time())  # 只要最新的数据
-        # 获得的是基坐标变换
-        x = t.transform.translation.x
-        y = t.transform.translation.y
-        z = t.transform.translation.z
-        rx = t.transform.rotation.x
-        ry = t.transform.rotation.y
-        rz = t.transform.rotation.z
-        rw = t.transform.rotation.w
+        # 得到的是基变换
+        tf_ros = tf_buffer.lookup_transform(target_frame, source_frame, rclpy.time.Time())
+
+        x = tf_ros.transform.translation.x
+        y = tf_ros.transform.translation.y
+        z = tf_ros.transform.translation.z
+        rx = tf_ros.transform.rotation.x
+        ry = tf_ros.transform.rotation.y
+        rz = tf_ros.transform.rotation.z
+        rw = tf_ros.transform.rotation.w
         r = Rotation.from_quat([rx, ry, rz, rw])
         r = r.as_euler(seq="ZYX", degrees=False)  # 其TF变换是xyz->ypr
-        extri_mat = ros_xyzypr_to_tf_mat([x, y, z, r[0], r[1], r[2]], degrees=False, is_basis_change=True)
+        tf_mat = ros_xyzypr_to_tf_mat([x, y, z, r[0], r[1], r[2]], degrees=False, is_basis_change=True)
 
     except TransformException as ex:
-        self.get_logger().info(
-            f'Could not transform {src_frame} to {target_frame}: {ex}')
-        return
+        print(f'Could not transform {source_frame} to {target_frame}: {ex}')
+        return None
 
-    xyz = np.dot(xyz, extri_mat.T)[:, :3]
-    box3d_target[:, :3] = xyz[:, :3]
-    return box3d_src
+    return tf_mat
+
+
+def transform_box3d_frame(box3d_old_frame, tf_buffer=None, target_frame=None, source_frame=None, tf_mat=None):
+    box3d_new_frame = box3d_old_frame.copy()
+    xyz = box3d_new_frame[:, :3]
+    xyz = np.hstack((xyz, np.ones((xyz.shape[0], 1))))
+
+    if tf_mat is None:
+        tf_mat = listen_transform(tf_buffer, target_frame, source_frame)
+        if tf_mat is None:
+            return None
+
+    box3d_new_frame[:, :3] = transform_points_frame(tf_mat, xyz)
+    return box3d_new_frame
+
+
+def transform_points_frame(tf_mat, points):
+    points = points.copy()
+    points = (points @ tf_mat.T)[:, :3]
+    return points
+
+
+def publish_transform(tf_broadcaster, stamp, frame_id, child_frame_id, tf_mat):
+    t = TransformStamped()
+
+    t.header.stamp = stamp
+    t.header.frame_id = frame_id
+    t.child_frame_id = child_frame_id
+
+    xyzypr = tf_mat_to_ros_xyzypr(tf_mat, degrees=False, is_basis_change=True)
+
+    t.transform.translation.x = xyzypr[0]
+    t.transform.translation.y = xyzypr[1]
+    t.transform.translation.z = xyzypr[2]
+
+    q = Rotation.from_matrix(tf_mat[:3, :3]).as_quat()
+    t.transform.rotation.x = q[0]
+    t.transform.rotation.y = q[1]
+    t.transform.rotation.z = q[2]
+    t.transform.rotation.w = q[3]
+
+    # Send the transformation
+    tf_broadcaster.sendTransform(t)
 
 
 if __name__ == '__main__':
