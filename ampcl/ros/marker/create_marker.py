@@ -334,3 +334,111 @@ def init_marker_array():
     empty_marker.action = Marker.DELETEALL
     box3d_marker_array.markers.append(empty_marker)
     return box3d_marker_array
+
+
+def create_convex_hull_marker(convex_hull, stamp, frame_id="lidar",
+                              convex_hull_ns="shape",
+                              convex_hull_color=(0.0, 0.0, 0.0), convex_hull_id=0,
+                              text_ns="text", text=None, text_size=0.8,
+                              line_width=0.05):
+    convex_hull_marker = Marker()
+    convex_hull_marker.header.stamp = stamp
+    convex_hull_marker.header.frame_id = frame_id
+    convex_hull_marker.ns = convex_hull_ns
+    convex_hull_marker.id = convex_hull_id
+    convex_hull_marker.type = Marker.LINE_LIST
+    convex_hull_marker.action = Marker.MODIFY
+
+    convex_hull_marker.scale.x = line_width
+
+    z_upper_boundary = np.zeros((convex_hull.footprint.shape[0]), dtype=np.float32) \
+                       + convex_hull.dimension_h / 2 + convex_hull.centroid[2]
+    z_lower_boundary = np.zeros((convex_hull.footprint.shape[0]), dtype=np.float32) - convex_hull.dimension_h / 2 \
+                       + convex_hull.centroid[2]
+
+    z_upper_boundary = np.hstack((convex_hull.footprint, z_upper_boundary[:, np.newaxis]))
+    z_lower_boundary = np.hstack((convex_hull.footprint, z_lower_boundary[:, np.newaxis]))
+
+    points = np.vstack((z_upper_boundary, z_lower_boundary))
+
+    # build line
+    lines = []
+    for i in range(convex_hull.footprint.shape[0] - 1):
+        lines.append([i, (i + 1)])
+    lines.append([convex_hull.footprint.shape[0] - 1, 0])
+
+    for i in range(convex_hull.footprint.shape[0], points.shape[0] - 1):
+        lines.append([i, (i + 1)])
+    lines.append([points.shape[0] - 1, convex_hull.footprint.shape[0]])
+
+    for i in range(convex_hull.footprint.shape[0] - 1):
+        lines.append([i, (i + convex_hull.footprint.shape[0])])
+
+    for i in range(len(lines)):
+        point = Point()
+        point.x = float(points[lines[i][0], 0])
+        point.y = float(points[lines[i][0], 1])
+        point.z = float(points[lines[i][0], 2])
+        convex_hull_marker.points.append(point)
+
+        point = Point()
+        point.x = float(points[lines[i][1], 0])
+        point.y = float(points[lines[i][1], 1])
+        point.z = float(points[lines[i][1], 2])
+        convex_hull_marker.points.append(point)
+
+    set_color(convex_hull_marker, (convex_hull_color[0], convex_hull_color[1], convex_hull_color[2], 0.999))
+    set_lifetime(convex_hull_marker, seconds=0.0)
+
+    marker_dict = {"convex_hull_marker": convex_hull_marker}
+
+    text_marker = Marker()
+    text_marker.header.stamp = stamp
+    text_marker.header.frame_id = frame_id
+    text_marker.ns = text_ns
+    text_marker.id = convex_hull_id
+    text_marker.action = Marker.ADD
+    text_marker.type = Marker.TEXT_VIEW_FACING
+
+    set_color(text_marker, (0.0, 0.0, 1.0, 0.999))
+    set_orientation(text_marker, [0.0, 0.0, 0.0, 1.0])
+
+    pos_x = convex_hull.centroid[0]
+    pos_y = convex_hull.centroid[1]
+    pos_z = convex_hull.centroid[2] + convex_hull.dimension_h / 2.0 + 0.5
+    set_position(text_marker, (pos_x, pos_y, pos_z))
+
+    distance = np.linalg.norm(convex_hull.centroid[:3])
+    text_marker.text = f"{distance:.1f}"
+    text_marker.scale.z = text_size  # 设置字体大小
+
+    set_lifetime(text_marker, seconds=0.0)
+    marker_dict["text_marker"] = text_marker
+
+    return marker_dict
+
+
+def create_convex_hull_marker_array(box3d_marker_array, convex_hull_list,
+                                    stamp, frame_id,
+                                    convex_hull_ns="box3d",
+                                    color_method=None,
+                                    line_width=0.05,
+                                    text_ns="text", text_list=None, text_size=0.8,
+                                    pc_np=None, pc_color=None):
+    if len(convex_hull_list) == 0:
+        return
+
+    convex_hull_color = [1, 0, 0]
+    for i in range(len(convex_hull_list)):
+        convex_hull = convex_hull_list[i]
+        text = str(text_list[i]) if text_list is not None else None
+
+        marker_dict = create_convex_hull_marker(convex_hull,
+                                                stamp, frame_id=frame_id,
+                                                convex_hull_id=i, convex_hull_ns=convex_hull_ns,
+                                                convex_hull_color=convex_hull_color,
+                                                text_ns=text_ns, text=text,
+                                                line_width=line_width,
+                                                text_size=text_size)
+
+        box3d_marker_array.markers += list(marker_dict.values())

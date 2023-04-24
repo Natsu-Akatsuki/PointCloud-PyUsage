@@ -4,10 +4,13 @@ from pathlib import Path
 import cv2
 import numpy as np
 import yaml
+from ampcl.perception.range_img_cluster_pyb import cRangeImgCluster
+
 from ampcl.calibration import object3d_kitti, calibration
 from ampcl.calibration.calibration_kitti import KITTICalibration
 from ampcl.io import load_pointcloud
 from ampcl.perception import cEuclideanCluster, ground_segmentation_gpf
+from ampcl.perception.shape_estimation import ConvexHullModel
 from ampcl.ros import marker, publisher
 from ampcl.visualization import color_o3d_to_color_ros, paint_box2d_on_img
 from easydict import EasyDict
@@ -158,12 +161,28 @@ class Visualization(Node):
 
         # 聚类分割
         pc_color = np.full((non_ground_pc.shape[0], 3), np.array([0.8, 0.8, 0.8]))
+        # range_img_cluster = cRangeImgCluster(horizon_res=0.15, vertical_res=0.4,
+        #                                      threshold_h=10, threshold_v=10,
+        #                                      img_width=1800, img_height=64)
+        #
+        # cluster_idx_list = range_img_cluster.cluster(non_ground_pc)
         cluster_idx_list = cEuclideanCluster(non_ground_pc, tolerance=0.5, min_size=20, max_size=30000)
         cluster_list = []
         for i, cluster_idx in enumerate(cluster_idx_list):
             pc_color[cluster_idx] = instance_id_to_color(i)
             cluster = non_ground_pc[cluster_idx]
             cluster_list.append(cluster)
+
+        convex_hull_list = []
+        for i, cluster in enumerate(cluster_list):
+            convex_hull = ConvexHullModel()
+            convex_hull.estimate(cluster[:, :3])
+            convex_hull_list.append(convex_hull)
+        marker.create_convex_hull_marker_array(box3d_marker_array, convex_hull_list,
+                                               stamp, frame_id=self.frame_id,
+                                               convex_hull_ns="pred/detection/convex_hull",
+                                               text_ns="pred/detection/convex_hull/text",
+                                               text_size=0.5)
 
         # 将聚类点云团投影到图像下
         cluster_2d4c_list = []
@@ -178,8 +197,6 @@ class Visualization(Node):
 
         img_debug = paint_box2d_on_img(img.copy(), cluster_2d4c_list, cls_idx=cluster_2d4c_list[:, 4])
         publisher.publish_img(img_debug, self.pub_dict["/pred/img/box2d4c_lidar"], stamp, self.frame_id)
-
-        # TODO：追加显示凸包的marker
 
         if gt_info is not None:
             # Debug: 发布图像2D真值框

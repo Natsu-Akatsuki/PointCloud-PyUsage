@@ -43,8 +43,7 @@ def shape_estimation(clusters, debug=False, o3d_objs=None):
 
     cluster_shapes = []
     for i, cluster in enumerate(clusters):
-        cluster_shape = convex_model.estimate(cluster[:, :3])
-        cluster_shapes.append(cluster_shape)
+        convex_model.estimate(cluster[:, :3])
 
         if debug:
             o3d_objs.append(convex_model.generate_polygon_o3d())
