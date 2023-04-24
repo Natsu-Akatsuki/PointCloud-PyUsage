@@ -1,22 +1,22 @@
 # AmPCL
 
-> **Note**
+> **Attention**
 >
-> 仓库在迭代更新中，相关API或不稳定，欢迎issue和PR
+> 仓库在更新迭代中，相关API可能不稳定，欢迎**Issue**和**PR**
 
-人生苦短，我选Python，提供感知算法（大感知，含SLAM）的相关Python API（Python实现和Pybind后的C++实现），以学习和掌握相关算法，并对其进行验证和实现原型的快速开发。基于本仓库可实现的感知功能<u>预期</u>包括但不仅限于：
+人生苦短，我选Python，提供感知算法（此为大感知，含SLAM）的Python API（Python实现和Pybind后的C++实现），以学习、掌握、验证相关算法，并并行快速原型开发。基于本仓库可实现的感知功能<u>**预期**</u>包含但不限于：
 
 - 传统方案：地面分割、聚类分割、形状拟合、SLAM
 - 深度学习：三维目标检测、三维目标跟踪、三维语义分割、三维实例分割
-- 其他：点云文件的IO处理、TF变换、标定、基于RViz和Open3D等工具库的可视化、三维目标检测效果的可视化评测
+- 其他：点云文件的IO处理、TF变换、标定、可视化、度量测评
 
-|    <img src="docs/3d_object_tracking.gif" align="middle">    |  <img src="docs/3d_object_detectino.gif" align="middle">  |
-| :----------------------------------------------------------: | :-------------------------------------------------------: |
-|             三维目标检测（3D Object Detection）              |            三维目标检测（3D Object Tracking）             |
-|           <img src="docs/slam.gif" align="middle">           | <img src="docs/extrinsic_calibration.gif" align="middle"> |
-|                    即时定位与建图（SLAM）                    |     相机和激光雷达的外参标定（Extrinsic Calibration）     |
-| <img src="docs/moving_object_segmentation.gif" align="middle"> |                             —                             |
-|           去动态点云（Moving Object Segmentation）           |                             —                             |
+| <span style="font-weight:normal">三维目标检测（3D Object Detection）</span> | <span style="font-weight:normal">三维目标跟踪（3D Object Tracking）</span> |
+| :----------------------------------------------------------: | :----------------------------------------------------------: |
+|    <img src="docs/3d_object_tracking.gif" align="middle">    |   <img src="docs/3d_object_detectino.gif" align="middle">    |
+|                    即时定位与建图（SLAM）                    |      相机和激光雷达的外参标定（Extrinsic Calibration）       |
+|           <img src="docs/slam.gif" align="middle">           |  <img src="docs/extrinsic_calibration.gif" align="middle">   |
+|           去动态点云（Moving Object Segmentation）           |             传统检测方案（Traditional Pipeline）             |
+| <img src="docs/moving_object_segmentation.gif" align="middle"> |   <img src="docs/traditional_pipeline.gif" align="middle">   |
 
 ## 安装
 
