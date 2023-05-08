@@ -10,7 +10,7 @@ open3d format: float32[N,3] rgb (0,1)
 
 
 @vectorize([float32(float32),
-            float32(int32)])
+            float32(int32)], cache=True)
 def intensity_to_color(intensity):
     if intensity < 30:
         green = int(intensity / 30 * 255)
